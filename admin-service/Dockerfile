@@ -1,10 +1,15 @@
 FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
+
+# Copy go modules from root
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Copy source code
 COPY . .
+
+# Build the service
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./admin-service
 
 FROM alpine:latest
