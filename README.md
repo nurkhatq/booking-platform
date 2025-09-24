@@ -50,8 +50,8 @@ cp .env.example .env
 
 ### 2. SSL Certificates
 Place your SSL certificates at:
-- `/etc/ssl/certs/jazyl.tech.pem`
-- `/etc/ssl/private/jazyl.tech.key`
+- `ssl/jazyl.tech.pem`
+- `ssl/jazyl.tech.key`
 
 Or update the paths in your `.env` file.
 

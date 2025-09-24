@@ -214,8 +214,8 @@ func Load() *Config {
         },
         
         SSL: SSLConfig{
-            CertPath: getEnv("SSL_CERT_PATH", "/etc/ssl/certs/jazyl.tech.pem"),
-            KeyPath:  getEnv("SSL_KEY_PATH", "/etc/ssl/private/jazyl.tech.key"),
+            CertPath: getEnv("SSL_CERT_PATH", "./ssl/jazyl.tech.pem"),
+            KeyPath:  getEnv("SSL_KEY_PATH", "./ssl/jazyl.tech.key"),
         },
     }
     

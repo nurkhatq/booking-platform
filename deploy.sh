@@ -5,11 +5,11 @@ set -e
 echo "🚀 Starting Booking Platform Deployment..."
 
 # Check if SSL certificates exist
-if [ ! -f "/etc/ssl/certs/jazyl.tech.pem" ] || [ ! -f "/etc/ssl/private/jazyl.tech.key" ]; then
+if [ ! -f "ssl/jazyl.tech.pem" ] || [ ! -f "ssl/jazyl.tech.key" ]; then
     echo "❌ SSL certificates not found!"
     echo "Please ensure SSL certificates are placed at:"
-    echo "  - /etc/ssl/certs/jazyl.tech.pem"
-    echo "  - /etc/ssl/private/jazyl.tech.key"
+    echo "  - ssl/jazyl.tech.pem"
+    echo "  - ssl/jazyl.tech.key"
     exit 1
 fi
 
@@ -25,9 +25,9 @@ echo "📁 Creating directories..."
 mkdir -p postgres_data redis_data logs
 
 # Generate dhparam for SSL if it doesn't exist
-if [ ! -f "/etc/ssl/certs/dhparam.pem" ]; then
+if [ ! -f "ssl/dhparam.pem" ]; then
     echo "🔐 Generating dhparam for SSL..."
-    openssl dhparam -out /etc/ssl/certs/dhparam.pem 2048
+    openssl dhparam -out ssl/dhparam.pem 2048
 fi
 
 # Stop existing containers
