@@ -130,12 +130,12 @@ func (s *BookingService) CreateBooking(ctx context.Context, req *pb.CreateBookin
 }
 
 func (s *BookingService) GetBookings(ctx context.Context, req *pb.GetBookingsRequest) (*pb.GetBookingsResponse, error) {
-    db := database.GetDB()
-    
     tenantID, err := uuid.Parse(req.TenantId)
     if err != nil {
         return nil, status.Error(codes.InvalidArgument, "Invalid tenant ID")
     }
+    
+    db := database.GetDB()
     
     // Build query
     query := "SELECT * FROM bookings WHERE tenant_id = $1"
