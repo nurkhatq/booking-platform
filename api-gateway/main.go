@@ -5,167 +5,184 @@ import (
     "log"
     "net/http"
     "os"
-    "os/signal"
-    "syscall"
-    
+    "time"
+
     "github.com/gin-gonic/gin"
-    "github.com/gin-contrib/cors"
     "google.golang.org/grpc"
-    
+    "google.golang.org/grpc/credentials/insecure"
+    "google.golang.org/grpc/keepalive"
+
     "booking-platform/api-gateway/handlers"
     "booking-platform/api-gateway/middleware"
     "booking-platform/api-gateway/routes"
     "booking-platform/shared/config"
     "booking-platform/shared/database"
-    "booking-platform/shared/cache"
-    "booking-platform/shared/auth"
-    "booking-platform/shared/i18n"
+    "booking-platform/shared/redis"
 )
 
 func main() {
     // Load configuration
     cfg := config.Load()
-    
-    // Initialize dependencies
-    if err := database.Initialize(cfg); err != nil {
-        log.Fatalf("Failed to initialize database: %v", err)
+
+    // Initialize database
+    err := database.Initialize(cfg)
+    if err != nil {
+        log.Fatal("Failed to initialize database:", err)
     }
-    defer database.Close()
-    
-    if err := cache.Initialize(cfg); err != nil {
-        log.Fatalf("Failed to initialize cache: %v", err)
+    log.Println("Database connection established successfully")
+
+    // Initialize Redis
+    err = redis.Initialize(cfg)
+    if err != nil {
+        log.Fatal("Failed to initialize Redis:", err)
     }
-    defer cache.Close()
-    
-    auth.Initialize(cfg)
-    
-    if err := i18n.Initialize(cfg); err != nil {
-        log.Fatalf("Failed to initialize i18n: %v", err)
-    }
-    
-    // Initialize gRPC connections
-    grpcConnections := initializeGRPCConnections(cfg)
-    defer closeGRPCConnections(grpcConnections)
-    
-    // Initialize handlers
-    h := handlers.NewHandler(cfg, grpcConnections)
-    
-if cfg.Environment == "production" {
+    log.Println("Redis connection established successfully")
+
+    // Initialize gRPC clients with retry and keepalive
+    grpcClients := initializeGRPCClients(cfg)
+    defer closeGRPCClients(grpcClients)
+
+    // Initialize handlers with gRPC clients
+    handler := handlers.NewHandler(grpcClients)
+
+    // Setup Gin router
+    if os.Getenv("GIN_MODE") == "release" {
         gin.SetMode(gin.ReleaseMode)
     }
-    
+
     r := gin.Default()
-    
-    // Configure CORS
-    corsConfig := cors.DefaultConfig()
-    corsConfig.AllowOrigins = []string{
-        "https://*.jazyl.tech",
-        "https://jazyl.tech",
-        "http://localhost:3000", // For development
-    }
-    corsConfig.AllowCredentials = true
-    corsConfig.AllowHeaders = []string{
-        "Origin", "Content-Length", "Content-Type", "Authorization",
-        "X-Requested-With", "Accept", "Accept-Language", "X-Subdomain",
-    }
-    r.Use(cors.New(corsConfig))
-    
+
     // Add middleware
-    r.Use(middleware.RequestLogger())
-    r.Use(middleware.RateLimit(cfg))
-    r.Use(middleware.SubdomainExtractor())
-    r.Use(middleware.LanguageDetector(cfg))
-    
+    r.Use(middleware.CORS())
+    r.Use(middleware.Logger())
+    r.Use(middleware.ErrorHandler())
+    r.Use(middleware.RequestID())
+    r.Use(middleware.RateLimit())
+    r.Use(middleware.I18n())
+
+    // Setup routes
+    routes.SetupRoutes(r, handler)
+
     // Health check endpoint
     r.GET("/health", func(c *gin.Context) {
         c.JSON(http.StatusOK, gin.H{
-            "status": "healthy",
             "service": "api-gateway",
+            "status":  "healthy",
         })
     })
-    
-    // Setup routes
-    routes.SetupRoutes(r, h, cfg)
-    
-    // Start server
-    port := fmt.Sprintf(":%d", cfg.Services.APIGateway)
-    log.Printf("API Gateway starting on port %s", port)
-    
-    // Graceful shutdown
-    go func() {
-        if err := r.Run(port); err != nil && err != http.ErrServerClosed {
-            log.Fatalf("Failed to start server: %v", err)
-        }
-    }()
-    
-    // Wait for interrupt signal
-    quit := make(chan os.Signal, 1)
-    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-    <-quit
-    
-    log.Println("API Gateway shutting down...")
+
+    port := os.Getenv("PORT")
+    if port == "" {
+        port = "8080"
+    }
+
+    log.Printf("API Gateway starting on port :%s", port)
+    if err := r.Run(":" + port); err != nil {
+        log.Fatal("Failed to start server:", err)
+    }
 }
 
-func initializeGRPCConnections(cfg *config.Config) map[string]*grpc.ClientConn {
-    connections := make(map[string]*grpc.ClientConn)
-    
-    // User Service
-    userConn, err := grpc.Dial(
-        fmt.Sprintf("user-service:%d", cfg.Services.UserGRPC),
-        grpc.WithInsecure(),
-    )
-    if err != nil {
-        log.Fatalf("Failed to connect to user service: %v", err)
+func initializeGRPCClients(cfg *config.Config) map[string]*grpc.ClientConn {
+    grpcClients := make(map[string]*grpc.ClientConn)
+
+    // gRPC connection options with keepalive and retry
+    opts := []grpc.DialOption{
+        grpc.WithTransportCredentials(insecure.NewCredentials()),
+        grpc.WithKeepaliveParams(keepalive.ClientParameters{
+            Time:                10 * time.Second,
+            Timeout:             3 * time.Second,
+            PermitWithoutStream: true,
+        }),
+        grpc.WithDefaultCallOptions(
+            grpc.WaitForReady(true),
+        ),
     }
-    connections["user"] = userConn
-    
-    // Booking Service
-    bookingConn, err := grpc.Dial(
-        fmt.Sprintf("booking-service:%d", cfg.Services.BookingGRPC),
-        grpc.WithInsecure(),
+
+    // User Service connection
+    userServiceAddr := fmt.Sprintf("%s:%s", 
+        getEnvOrDefault("USER_SERVICE_HOST", "user-service"),
+        getEnvOrDefault("USER_SERVICE_GRPC_PORT", "50051"),
     )
-    if err != nil {
-        log.Fatalf("Failed to connect to booking service: %v", err)
-    }
-    connections["booking"] = bookingConn
     
-    // Notification Service
-    notificationConn, err := grpc.Dial(
-        fmt.Sprintf("notification-service:%d", cfg.Services.NotificationGRPC),
-        grpc.WithInsecure(),
+    log.Printf("Connecting to User Service at %s", userServiceAddr)
+    userConn, err := grpc.Dial(userServiceAddr, opts...)
+    if err != nil {
+        log.Fatal("Failed to connect to User Service:", err)
+    }
+    grpcClients["user"] = userConn
+    log.Println("User Service gRPC connection established")
+
+    // Booking Service connection
+    bookingServiceAddr := fmt.Sprintf("%s:%s",
+        getEnvOrDefault("BOOKING_SERVICE_HOST", "booking-service"),
+        getEnvOrDefault("BOOKING_SERVICE_GRPC_PORT", "50052"),
     )
-    if err != nil {
-        log.Fatalf("Failed to connect to notification service: %v", err)
-    }
-    connections["notification"] = notificationConn
     
-    // Payment Service
-    paymentConn, err := grpc.Dial(
-        fmt.Sprintf("payment-service:%d", cfg.Services.PaymentGRPC),
-        grpc.WithInsecure(),
+    log.Printf("Connecting to Booking Service at %s", bookingServiceAddr)
+    bookingConn, err := grpc.Dial(bookingServiceAddr, opts...)
+    if err != nil {
+        log.Fatal("Failed to connect to Booking Service:", err)
+    }
+    grpcClients["booking"] = bookingConn
+    log.Println("Booking Service gRPC connection established")
+
+    // Notification Service connection
+    notificationServiceAddr := fmt.Sprintf("%s:%s",
+        getEnvOrDefault("NOTIFICATION_SERVICE_HOST", "notification-service"),
+        getEnvOrDefault("NOTIFICATION_SERVICE_GRPC_PORT", "50053"),
     )
-    if err != nil {
-        log.Fatalf("Failed to connect to payment service: %v", err)
-    }
-    connections["payment"] = paymentConn
     
-    // Admin Service
-    adminConn, err := grpc.Dial(
-        fmt.Sprintf("admin-service:%d", cfg.Services.AdminGRPC),
-        grpc.WithInsecure(),
+    log.Printf("Connecting to Notification Service at %s", notificationServiceAddr)
+    notificationConn, err := grpc.Dial(notificationServiceAddr, opts...)
+    if err != nil {
+        log.Fatal("Failed to connect to Notification Service:", err)
+    }
+    grpcClients["notification"] = notificationConn
+    log.Println("Notification Service gRPC connection established")
+
+    // Payment Service connection
+    paymentServiceAddr := fmt.Sprintf("%s:%s",
+        getEnvOrDefault("PAYMENT_SERVICE_HOST", "payment-service"),
+        getEnvOrDefault("PAYMENT_SERVICE_GRPC_PORT", "50054"),
     )
-    if err != nil {
-        log.Fatalf("Failed to connect to admin service: %v", err)
-    }
-    connections["admin"] = adminConn
     
-    return connections
+    log.Printf("Connecting to Payment Service at %s", paymentServiceAddr)
+    paymentConn, err := grpc.Dial(paymentServiceAddr, opts...)
+    if err != nil {
+        log.Fatal("Failed to connect to Payment Service:", err)
+    }
+    grpcClients["payment"] = paymentConn
+    log.Println("Payment Service gRPC connection established")
+
+    // Admin Service connection
+    adminServiceAddr := fmt.Sprintf("%s:%s",
+        getEnvOrDefault("ADMIN_SERVICE_HOST", "admin-service"),
+        getEnvOrDefault("ADMIN_SERVICE_GRPC_PORT", "50055"),
+    )
+    
+    log.Printf("Connecting to Admin Service at %s", adminServiceAddr)
+    adminConn, err := grpc.Dial(adminServiceAddr, opts...)
+    if err != nil {
+        log.Fatal("Failed to connect to Admin Service:", err)
+    }
+    grpcClients["admin"] = adminConn
+    log.Println("Admin Service gRPC connection established")
+
+    log.Println("All gRPC connections established successfully")
+    return grpcClients
 }
 
-func closeGRPCConnections(connections map[string]*grpc.ClientConn) {
-    for name, conn := range connections {
+func closeGRPCClients(clients map[string]*grpc.ClientConn) {
+    for name, conn := range clients {
         if err := conn.Close(); err != nil {
-            log.Printf("Error closing %s connection: %v", name, err)
+            log.Printf("Error closing %s gRPC connection: %v", name, err)
         }
     }
+}
+
+func getEnvOrDefault(key, defaultValue string) string {
+    if value := os.Getenv(key); value != "" {
+        return value
+    }
+    return defaultValue
 }
