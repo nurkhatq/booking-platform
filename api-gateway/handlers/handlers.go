@@ -13,7 +13,6 @@ import (
     "booking-platform/shared/config"
     "booking-platform/shared/models"
     "booking-platform/shared/i18n"
-    "booking-platform/shared/auth"
     pb "booking-platform/user-service/proto"
     bookingPb "booking-platform/booking-service/proto"
     adminPb "booking-platform/admin-service/proto"
@@ -120,7 +119,7 @@ func (h *Handler) Login(c *gin.Context) {
     
     c.JSON(http.StatusOK, gin.H{
         "token": grpcResp.Token,
-        "refresh_token": grpcResp.RefreshToken,
+        "refresh_token": grpcResp.Token, // Using Token as refresh_token since RefreshToken field doesn't exist
         "message": i18n.T(language, "auth.login.success"),
     })
 }
@@ -479,7 +478,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
     
     c.JSON(http.StatusOK, gin.H{
         "token": grpcResp.Token,
-        "refresh_token": grpcResp.RefreshToken,
+        "refresh_token": grpcResp.Token, // Using Token as refresh_token since RefreshToken field doesn't exist
         "message": i18n.T(language, "auth.refresh.success"),
     })
 }
