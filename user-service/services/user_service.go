@@ -7,7 +7,6 @@ import (
     "time"
     
     "github.com/google/uuid"
-    "github.com/jmoiron/sqlx"
     "golang.org/x/crypto/bcrypt"
     "google.golang.org/grpc/codes"
     "google.golang.org/grpc/status"
@@ -370,11 +369,6 @@ func userToProto(user *models.User) *pb.User {
         locationID = user.LocationID.String()
     }
     
-    var lastLogin string
-    if user.LastLogin != nil {
-        lastLogin = user.LastLogin.Format(time.RFC3339)
-    }
-    
     return &pb.User{
         Id:            user.ID.String(),
         TenantId:      tenantID,
@@ -387,7 +381,6 @@ func userToProto(user *models.User) *pb.User {
         IsActive:      user.IsActive,
         EmailVerified: user.EmailVerified,
         PhoneVerified: user.PhoneVerified,
-        LastLogin:     lastLogin,
         CreatedAt:     user.CreatedAt.Format(time.RFC3339),
         UpdatedAt:     user.UpdatedAt.Format(time.RFC3339),
     }
