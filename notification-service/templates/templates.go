@@ -1,8 +1,6 @@
 package templates
 
-import (
-    "fmt"
-)
+// No imports needed for this file
 
 var templates = map[string]map[string]string{
     "booking_confirmation": {
