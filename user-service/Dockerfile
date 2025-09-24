@@ -1,27 +1,34 @@
-FROM golang:1.21-alpine AS builder
+FROM booking-platform-base:latest AS builder
+
+# Copy only this service's code
+COPY user-service/ ./user-service/
+
+# Build the service
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' -o main ./user-service
+
+# Production stage
+FROM alpine:3.18
+
+# Install only necessary packages
+RUN apk --no-cache add ca-certificates tzdata curl
+
+# Create non-root user
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
 
 WORKDIR /app
 
-# Copy go modules from root
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy source code
-COPY . .
-
-# Build the service
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./user-service
-
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates curl
-WORKDIR /root/
-
+# Copy binary and assets
 COPY --from=builder /app/main .
 COPY --from=builder /app/shared/i18n/locales ./shared/i18n/locales
 
+# Change ownership
+RUN chown -R appuser:appgroup /app
+USER appuser
+
 EXPOSE 8081 50051
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:8081/health || exit 1
 
 CMD ["./main"]

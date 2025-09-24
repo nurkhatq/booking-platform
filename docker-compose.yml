@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
@@ -12,8 +12,9 @@ services:
       - ./migrations:/docker-entrypoint-initdb.d
     networks:
       - booking_network
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -25,6 +26,7 @@ services:
       - redis_data:/data
     networks:
       - booking_network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 30s
@@ -43,6 +45,7 @@ services:
       - api-gateway
     networks:
       - booking_network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
