@@ -45,6 +45,12 @@ func SetupRoutes(r *gin.Engine, h *handlers.Handler, cfg *config.Config) {
         main.POST("/refresh-token", h.RefreshToken)
     }
     
+    // Admin login route (public, no auth required)
+    adminPublic := r.Group("/api/v1/admin")
+    {
+        adminPublic.POST("/login", h.AdminLogin)
+    }
+    
     // Authenticated routes
     auth := r.Group("/api/v1")
     auth.Use(middleware.AuthRequired())

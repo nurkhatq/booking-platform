@@ -124,6 +124,74 @@ func (h *Handler) Login(c *gin.Context) {
     })
 }
 
+func (h *Handler) AdminLogin(c *gin.Context) {
+    var req models.LoginRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{
+            "error": "validation_error",
+            "message": err.Error(),
+        })
+        return
+    }
+    
+    language := c.GetString("language")
+    
+    // Call user service via gRPC to authenticate
+    userClient := pb.NewUserServiceClient(h.grpc["user"])
+    
+    grpcReq := &pb.LoginRequest{
+        Email:    req.Email,
+        Password: req.Password,
+    }
+    
+    grpcResp, err := userClient.Login(c.Request.Context(), grpcReq)
+    if err != nil {
+        if st, ok := status.FromError(err); ok {
+            switch st.Code() {
+            case codes.Unauthenticated:
+                c.JSON(http.StatusUnauthorized, gin.H{
+                    "error": "invalid_credentials",
+                    "message": i18n.T(language, "auth.login.invalid_credentials"),
+                })
+                return
+            case codes.NotFound:
+                c.JSON(http.StatusUnauthorized, gin.H{
+                    "error": "user_not_found",
+                    "message": i18n.T(language, "auth.login.user_not_found"),
+                })
+                return
+            default:
+                c.JSON(http.StatusInternalServerError, gin.H{
+                    "error": "internal_error",
+                    "message": i18n.T(language, "error.internal_server_error"),
+                })
+                return
+            }
+        }
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "error": "internal_error",
+            "message": i18n.T(language, "error.internal_server_error"),
+        })
+        return
+    }
+    
+    // Check if user has SUPER_ADMIN role
+    if grpcResp.User.Role != "SUPER_ADMIN" {
+        c.JSON(http.StatusForbidden, gin.H{
+            "error": "insufficient_permissions",
+            "message": "Admin access required",
+        })
+        return
+    }
+    
+    c.JSON(http.StatusOK, gin.H{
+        "token": grpcResp.Token,
+        "refresh_token": grpcResp.Token,
+        "user": grpcResp.User,
+        "message": i18n.T(language, "auth.login.success"),
+    })
+}
+
 func (h *Handler) VerifyClient(c *gin.Context) {
     var req models.ClientVerificationRequest
     if err := c.ShouldBindJSON(&req); err != nil {
