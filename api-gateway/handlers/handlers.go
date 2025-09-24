@@ -3,7 +3,6 @@ package handlers
 import (
     "net/http"
     "strconv"
-    "time"
     
     "github.com/gin-gonic/gin"
     "github.com/google/uuid"
@@ -174,7 +173,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 func (h *Handler) GetDashboard(c *gin.Context) {
     _ = c.GetString("user_id") // userID will be used in future implementation
     _ = c.GetString("tenant_id") // tenantID will be used in future implementation
-    _ = c.GetString("user_role") // role will be used in future implementation
+    role := c.GetString("user_role") // role will be used in future implementation
     language := c.GetString("language")
     
     // Call appropriate services based on role
@@ -225,7 +224,7 @@ func (h *Handler) CreateBooking(c *gin.Context) {
         return
     }
     
-    userID := c.GetString("user_id")
+    _ = c.GetString("user_id") // userID will be used in future implementation
     role := c.GetString("user_role")
     language := c.GetString("language")
     
