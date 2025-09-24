@@ -28,7 +28,7 @@ func NewHandler(cfg *config.Config, grpcConnections map[string]*grpc.ClientConn)
 
 // Public API Handlers
 func (h *Handler) GetBusinessInfo(c *gin.Context) {
-    subdomain := c.Param("subdomain")
+    _ = c.Param("subdomain") // subdomain will be used in future implementation
     language := c.GetString("language")
     
     // Call user service via gRPC to get business info
@@ -136,11 +136,11 @@ func (h *Handler) CreatePublicBooking(c *gin.Context) {
         return
     }
     
-    subdomain := c.GetString("subdomain")
+    _ = c.GetString("subdomain") // subdomain will be used in future implementation
     language := c.GetString("language")
     
     // First verify client
-    clientSession := models.ClientVerificationRequest{
+    _ = models.ClientVerificationRequest{ // clientSession will be used in future implementation
         Email: req.ClientEmail,
         Phone: req.ClientPhone,
         Name:  req.ClientName,
@@ -172,9 +172,9 @@ func (h *Handler) GetProfile(c *gin.Context) {
 }
 
 func (h *Handler) GetDashboard(c *gin.Context) {
-    userID := c.GetString("user_id")
-    tenantID := c.GetString("tenant_id")
-    role := c.GetString("user_role")
+    _ = c.GetString("user_id") // userID will be used in future implementation
+    _ = c.GetString("tenant_id") // tenantID will be used in future implementation
+    _ = c.GetString("user_role") // role will be used in future implementation
     language := c.GetString("language")
     
     // Call appropriate services based on role
@@ -190,16 +190,16 @@ func (h *Handler) GetDashboard(c *gin.Context) {
 }
 
 func (h *Handler) GetBookings(c *gin.Context) {
-    userID := c.GetString("user_id")
-    role := c.GetString("user_role")
+    _ = c.GetString("user_id") // userID will be used in future implementation
+    _ = c.GetString("user_role") // role will be used in future implementation
     language := c.GetString("language")
     
     // Parse query parameters
     page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
     limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-    status := c.Query("status")
-    dateFrom := c.Query("date_from")
-    dateTo := c.Query("date_to")
+    _ = c.Query("status") // status will be used in future implementation
+    _ = c.Query("date_from") // dateFrom will be used in future implementation
+    _ = c.Query("date_to") // dateTo will be used in future implementation
     
     // Call booking service via gRPC
     // Filter based on user role and permissions

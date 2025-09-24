@@ -11,8 +11,6 @@ import (
     
     "booking-platform/shared/auth"
     "booking-platform/shared/config"
-    "booking-platform/shared/cache"
-    "booking-platform/shared/i18n"
 )
 
 func RequestLogger() gin.HandlerFunc {
