@@ -17,7 +17,6 @@ import (
     "booking-platform/shared/cache"
     "booking-platform/shared/auth"
     "booking-platform/shared/i18n"
-    "booking-platform/user-service/handlers"
     "booking-platform/user-service/services"
     pb "booking-platform/user-service/proto"
 )
