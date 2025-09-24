@@ -1,0 +1,32 @@
+{
+    "auth.login.success": "Кіру сәтті аяқталды",
+    "auth.login.failed": "Қате деректер",
+    "auth.logout.success": "Сәтті шықу",
+    "auth.token.expired": "Токен мерзімі өтті",
+    "auth.token.invalid": "Жарамсыз токен",
+    
+    "booking.created": "Брондау сәтті жасалды",
+    "booking.cancelled": "Брондау тоқтатылды",
+    "booking.not_found": "Брондау табылмады",
+    "booking.cannot_cancel": "Приемнан %d сағат бұрын брондауды тоқтату мүмкін емес",
+    "booking.already_booked": "Бұл уақыт брондалған",
+    
+    "email.booking.confirmation.subject": "Брондауды растау - %s",
+    "email.booking.reminder.subject": "Прием туралы еске салу - %s",
+    "email.booking.cancellation.subject": "Брондау тоқтатылды - %s",
+    
+    "sms.verification.code": "Растау кодыңыз: %s",
+    "sms.booking.reminder": "Еске салу: %s уақытында %s күні приеміңіз бар",
+    
+    "error.internal": "Сервердің ішкі қатесі",
+    "error.validation": "Тексеру қатесі",
+    "error.not_found": "Ресурс табылмады",
+    "error.unauthorized": "Рұқсат етілмеген кіру",
+    "error.forbidden": "Кіруге тыйым салынған",
+    
+    "tenant.registration.pending": "Сіздің бизнес тіркеуіңіз мақұлдауды күтуде",
+    "tenant.registration.approved": "Сіздің бизнесіңіз мақұлданды",
+    "tenant.registration.rejected": "Сіздің бизнес тіркеуіңіз қабылданбады: %s",
+    "tenant.trial.expiring": "Сынақ мерзіміңіз %d күнде аяқталады",
+    "tenant.trial.expired": "Сынақ мерзіміңіз аяқталды"
+}

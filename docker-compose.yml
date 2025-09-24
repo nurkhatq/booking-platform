@@ -1,0 +1,178 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - booking_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - booking_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ${SSL_CERT_PATH}:/etc/ssl/certs/jazyl.tech.pem
+      - ${SSL_KEY_PATH}:/etc/ssl/private/jazyl.tech.key
+    depends_on:
+      - api-gateway
+    networks:
+      - booking_network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    environment:
+      - PORT=${API_GATEWAY_PORT}
+      - USER_SERVICE_GRPC_URL=user-service:${USER_SERVICE_GRPC_PORT}
+      - BOOKING_SERVICE_GRPC_URL=booking-service:${BOOKING_SERVICE_GRPC_PORT}
+      - NOTIFICATION_SERVICE_GRPC_URL=notification-service:${NOTIFICATION_SERVICE_GRPC_PORT}
+      - PAYMENT_SERVICE_GRPC_URL=payment-service:${PAYMENT_SERVICE_GRPC_PORT}
+      - ADMIN_SERVICE_GRPC_URL=admin-service:${ADMIN_SERVICE_GRPC_PORT}
+    depends_on:
+      - postgres
+      - redis
+      - user-service
+      - booking-service
+      - notification-service
+      - payment-service
+      - admin-service
+    networks:
+      - booking_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${API_GATEWAY_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    environment:
+      - HTTP_PORT=${USER_SERVICE_PORT}
+      - GRPC_PORT=${USER_SERVICE_GRPC_PORT}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - booking_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${USER_SERVICE_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  booking-service:
+    build:
+      context: ./booking-service
+      dockerfile: Dockerfile
+    environment:
+      - HTTP_PORT=${BOOKING_SERVICE_PORT}
+      - GRPC_PORT=${BOOKING_SERVICE_GRPC_PORT}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - booking_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${BOOKING_SERVICE_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    environment:
+      - HTTP_PORT=${NOTIFICATION_SERVICE_PORT}
+      - GRPC_PORT=${NOTIFICATION_SERVICE_GRPC_PORT}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - booking_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${NOTIFICATION_SERVICE_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  payment-service:
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
+    environment:
+      - HTTP_PORT=${PAYMENT_SERVICE_PORT}
+      - GRPC_PORT=${PAYMENT_SERVICE_GRPC_PORT}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - booking_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PAYMENT_SERVICE_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  admin-service:
+    build:
+      context: ./admin-service
+      dockerfile: Dockerfile
+    environment:
+      - HTTP_PORT=${ADMIN_SERVICE_PORT}
+      - GRPC_PORT=${ADMIN_SERVICE_GRPC_PORT}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - booking_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${ADMIN_SERVICE_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  booking_network:
+    driver: bridge

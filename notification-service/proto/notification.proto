@@ -1,0 +1,178 @@
+syntax = "proto3";
+
+package notification;
+
+option go_package = "booking-platform/notification-service/proto";
+
+service NotificationService {
+    // Email notifications
+    rpc SendEmail(SendEmailRequest) returns (SendEmailResponse);
+    rpc SendBookingConfirmation(SendBookingConfirmationRequest) returns (SendBookingConfirmationResponse);
+    rpc SendBookingReminder(SendBookingReminderRequest) returns (SendBookingReminderResponse);
+    rpc SendBookingCancellation(SendBookingCancellationRequest) returns (SendBookingCancellationResponse);
+    
+    // SMS notifications
+    rpc SendSMS(SendSMSRequest) returns (SendSMSResponse);
+    rpc SendVerificationCode(SendVerificationCodeRequest) returns (SendVerificationCodeResponse);
+    
+    // Background job management
+    rpc QueueJob(QueueJobRequest) returns (QueueJobResponse);
+    rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusResponse);
+    
+    // Bulk operations
+    rpc SendBulkEmails(SendBulkEmailsRequest) returns (SendBulkEmailsResponse);
+    rpc SendBulkSMS(SendBulkSMSRequest) returns (SendBulkSMSResponse);
+}
+
+message SendEmailRequest {
+    string to = 1;
+    string subject = 2;
+    string body = 3;
+    string template_name = 4;
+    map<string, string> template_data = 5;
+    string language = 6;
+}
+
+message SendEmailResponse {
+    string message_id = 1;
+    string message = 2;
+}
+
+message SendBookingConfirmationRequest {
+    string booking_id = 1;
+    string client_email = 2;
+    string client_name = 3;
+    string business_name = 4;
+    string service_name = 5;
+    string master_name = 6;
+    string booking_date = 7;
+    string booking_time = 8;
+    string location_address = 9;
+    string confirmation_code = 10;
+    string language = 11;
+}
+
+message SendBookingConfirmationResponse {
+    string message_id = 1;
+    string message = 2;
+}
+
+message SendBookingReminderRequest {
+    string booking_id = 1;
+    string client_email = 2;
+    string client_phone = 3;
+    string client_name = 4;
+    string business_name = 5;
+    string service_name = 6;
+    string master_name = 7;
+    string booking_date = 8;
+    string booking_time = 9;
+    string location_address = 10;
+    string language = 11;
+    int32 hours_before = 12;
+}
+
+message SendBookingReminderResponse {
+    string email_message_id = 1;
+    string sms_message_id = 2;
+    string message = 3;
+}
+
+message SendBookingCancellationRequest {
+    string booking_id = 1;
+    string client_email = 2;
+    string client_name = 3;
+    string business_name = 4;
+    string service_name = 5;
+    string booking_date = 6;
+    string booking_time = 7;
+    string cancellation_reason = 8;
+    string language = 9;
+}
+
+message SendBookingCancellationResponse {
+    string message_id = 1;
+    string message = 2;
+}
+
+message SendSMSRequest {
+    string to = 1;
+    string message = 2;
+    string language = 3;
+}
+
+message SendSMSResponse {
+    string message_id = 1;
+    string message = 2;
+}
+
+message SendVerificationCodeRequest {
+    string phone = 1;
+    string code = 2;
+    string language = 3;
+}
+
+message SendVerificationCodeResponse {
+    string message_id = 1;
+    string message = 2;
+}
+
+message QueueJobRequest {
+    string job_type = 1;
+    map<string, string> job_data = 2;
+    string scheduled_time = 3;
+    int32 retry_attempts = 4;
+}
+
+message QueueJobResponse {
+    string job_id = 1;
+    string message = 2;
+}
+
+message GetJobStatusRequest {
+    string job_id = 1;
+}
+
+message GetJobStatusResponse {
+    string job_id = 1;
+    string status = 2;
+    string result = 3;
+    int32 attempts = 4;
+    string created_at = 5;
+    string updated_at = 6;
+}
+
+message SendBulkEmailsRequest {
+    repeated EmailRecipient recipients = 1;
+    string subject = 2;
+    string body = 3;
+    string template_name = 4;
+    string language = 5;
+}
+
+message SendBulkEmailsResponse {
+    int32 queued_count = 1;
+    string message = 2;
+}
+
+message SendBulkSMSRequest {
+    repeated SMSRecipient recipients = 1;
+    string message = 2;
+    string language = 3;
+}
+
+message SendBulkSMSResponse {
+    int32 queued_count = 1;
+    string message = 2;
+}
+
+message EmailRecipient {
+    string email = 1;
+    string name = 2;
+    map<string, string> template_data = 3;
+}
+
+message SMSRecipient {
+    string phone = 1;
+    string name = 2;
+}

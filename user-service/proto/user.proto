@@ -1,0 +1,174 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "booking-platform/user-service/proto";
+
+service UserService {
+    // Authentication
+    rpc Login(LoginRequest) returns (LoginResponse);
+    rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+    rpc Logout(LogoutRequest) returns (LogoutResponse);
+    
+    // Tenant Management
+    rpc RegisterBusiness(RegisterBusinessRequest) returns (RegisterBusinessResponse);
+    rpc GetBusinessInfo(GetBusinessInfoRequest) returns (GetBusinessInfoResponse);
+    rpc UpdateBusinessInfo(UpdateBusinessInfoRequest) returns (UpdateBusinessInfoResponse);
+    
+    // User Management
+    rpc GetUserProfile(GetUserProfileRequest) returns (GetUserProfileResponse);
+    rpc UpdateUserProfile(UpdateUserProfileRequest) returns (UpdateUserProfileResponse);
+    rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+    rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+    
+    // Client Session Management
+    rpc CreateClientSession(CreateClientSessionRequest) returns (CreateClientSessionResponse);
+    rpc VerifyClientCode(VerifyClientCodeRequest) returns (VerifyClientCodeResponse);
+    rpc GetClientSession(GetClientSessionRequest) returns (GetClientSessionResponse);
+    
+    // Location Management
+    rpc CreateLocation(CreateLocationRequest) returns (CreateLocationResponse);
+    rpc UpdateLocation(UpdateLocationRequest) returns (UpdateLocationResponse);
+    rpc GetLocations(GetLocationsRequest) returns (GetLocationsResponse);
+    
+    // Master Management
+    rpc CreateMaster(CreateMasterRequest) returns (CreateMasterResponse);
+    rpc UpdateMaster(UpdateMasterRequest) returns (UpdateMasterResponse);
+    rpc GetMasters(GetMastersRequest) returns (GetMastersResponse);
+}
+
+message LoginRequest {
+    string email = 1;
+    string password = 2;
+}
+
+message LoginResponse {
+    string token = 1;
+    string refresh_token = 2;
+    User user = 3;
+}
+
+message RegisterBusinessRequest {
+    string business_name = 1;
+    string business_type = 2;
+    string subdomain = 3;
+    string timezone = 4;
+    string owner_email = 5;
+    string owner_phone = 6;
+    string owner_name = 7;
+}
+
+message RegisterBusinessResponse {
+    string tenant_id = 1;
+    string message = 2;
+}
+
+message User {
+    string id = 1;
+    string tenant_id = 2;
+    string location_id = 3;
+    string email = 4;
+    string phone = 5;
+    string first_name = 6;
+    string last_name = 7;
+    string role = 8;
+    bool is_active = 9;
+    bool email_verified = 10;
+    bool phone_verified = 11;
+    string created_at = 12;
+    string updated_at = 13;
+}
+
+message CreateClientSessionRequest {
+    string email = 1;
+    string phone = 2;
+    string name = 3;
+}
+
+message CreateClientSessionResponse {
+    string session_id = 1;
+    string message = 2;
+}
+
+message VerifyClientCodeRequest {
+    string session_id = 1;
+    string code = 2;
+}
+
+message VerifyClientCodeResponse {
+    string token = 1;
+    string message = 2;
+}
+
+// Additional message types would be defined here
+message RefreshTokenRequest { string refresh_token = 1; }
+message RefreshTokenResponse { string token = 1; }
+message LogoutRequest { string token = 1; }
+message LogoutResponse { string message = 1; }
+message GetBusinessInfoRequest { string subdomain = 1; }
+message GetBusinessInfoResponse { 
+    string business_name = 1;
+    string business_type = 2;
+    string timezone = 3;
+    repeated Location locations = 4;
+}
+message UpdateBusinessInfoRequest { string tenant_id = 1; }
+message UpdateBusinessInfoResponse { string message = 1; }
+message GetUserProfileRequest { string user_id = 1; }
+message GetUserProfileResponse { User user = 1; }
+message UpdateUserProfileRequest { User user = 1; }
+message UpdateUserProfileResponse { string message = 1; }
+message CreateUserRequest { User user = 1; }
+message CreateUserResponse { string user_id = 1; }
+message UpdateUserRequest { User user = 1; }
+message UpdateUserResponse { string message = 1; }
+message GetClientSessionRequest { string session_id = 1; }
+message GetClientSessionResponse { 
+    string id = 1;
+    string email = 2;
+    string phone = 3;
+    string first_name = 4;
+    string last_name = 5;
+}
+message CreateLocationRequest { Location location = 1; }
+message CreateLocationResponse { string location_id = 1; }
+message UpdateLocationRequest { Location location = 1; }
+message UpdateLocationResponse { string message = 1; }
+message GetLocationsRequest { string tenant_id = 1; }
+message GetLocationsResponse { repeated Location locations = 1; }
+message CreateMasterRequest { Master master = 1; }
+message CreateMasterResponse { string master_id = 1; }
+message UpdateMasterRequest { Master master = 1; }
+message UpdateMasterResponse { string message = 1; }
+message GetMastersRequest { 
+    string tenant_id = 1;
+    string location_id = 2;
+}
+message GetMastersResponse { repeated Master masters = 1; }
+
+message Location {
+    string id = 1;
+    string tenant_id = 2;
+    string name = 3;
+    string address = 4;
+    string city = 5;
+    string country = 6;
+    string phone = 7;
+    string manager_id = 8;
+    bool is_active = 9;
+}
+
+message Master {
+    string id = 1;
+    string user_id = 2;
+    string tenant_id = 3;
+    string location_id = 4;
+    string bio = 5;
+    string photo_url = 6;
+    string specialization = 7;
+    int32 experience_years = 8;
+    double rating = 9;
+    int32 total_reviews = 10;
+    bool is_visible = 11;
+    bool is_accepting_bookings = 12;
+}

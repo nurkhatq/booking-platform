@@ -1,0 +1,285 @@
+syntax = "proto3";
+
+package booking;
+
+option go_package = "booking-platform/booking-service/proto";
+
+service BookingService {
+    // Booking Management
+    rpc CreateBooking(CreateBookingRequest) returns (CreateBookingResponse);
+    rpc GetBooking(GetBookingRequest) returns (GetBookingResponse);
+    rpc GetBookings(GetBookingsRequest) returns (GetBookingsResponse);
+    rpc UpdateBooking(UpdateBookingRequest) returns (UpdateBookingResponse);
+    rpc CancelBooking(CancelBookingRequest) returns (CancelBookingResponse);
+    rpc CompleteBooking(CompleteBookingRequest) returns (CompleteBookingResponse);
+    
+    // Availability
+    rpc CheckAvailability(CheckAvailabilityRequest) returns (CheckAvailabilityResponse);
+    rpc GetMasterSchedule(GetMasterScheduleRequest) returns (GetMasterScheduleResponse);
+    
+    // Service Management
+    rpc CreateService(CreateServiceRequest) returns (CreateServiceResponse);
+    rpc UpdateService(UpdateServiceRequest) returns (UpdateServiceResponse);
+    rpc GetServices(GetServicesRequest) returns (GetServicesResponse);
+    rpc DeleteService(DeleteServiceRequest) returns (DeleteServiceResponse);
+    
+    // Statistics
+    rpc GetBookingStatistics(GetBookingStatisticsRequest) returns (GetBookingStatisticsResponse);
+}
+
+message CreateBookingRequest {
+    string tenant_id = 1;
+    string location_id = 2;
+    string master_id = 3;
+    string service_id = 4;
+    string client_session_id = 5;
+    string client_name = 6;
+    string client_email = 7;
+    string client_phone = 8;
+    string booking_date = 9;
+    string booking_time = 10;
+    string client_notes = 11;
+    string created_by = 12;
+}
+
+message CreateBookingResponse {
+    string booking_id = 1;
+    string confirmation_code = 2;
+    string message = 3;
+}
+
+message GetBookingRequest {
+    string booking_id = 1;
+}
+
+message GetBookingResponse {
+    Booking booking = 1;
+}
+
+message GetBookingsRequest {
+    string tenant_id = 1;
+    string location_id = 2;
+    string master_id = 3;
+    string client_email = 4;
+    string status = 5;
+    string date_from = 6;
+    string date_to = 7;
+    int32 page = 8;
+    int32 limit = 9;
+}
+
+message GetBookingsResponse {
+    repeated Booking bookings = 1;
+    int32 total = 2;
+    int32 page = 3;
+    int32 limit = 4;
+}
+
+message UpdateBookingRequest {
+    string booking_id = 1;
+    string booking_date = 2;
+    string booking_time = 3;
+    string client_notes = 4;
+    string master_notes = 5;
+}
+
+message UpdateBookingResponse {
+    string message = 1;
+}
+
+message CancelBookingRequest {
+    string booking_id = 1;
+    string reason = 2;
+    string cancelled_by = 3;
+}
+
+message CancelBookingResponse {
+    string message = 1;
+}
+
+message CompleteBookingRequest {
+    string booking_id = 1;
+    string master_notes = 2;
+}
+
+message CompleteBookingResponse {
+    string message = 1;
+}
+
+message CheckAvailabilityRequest {
+    string tenant_id = 1;
+    string location_id = 2;
+    string master_id = 3;
+    string service_id = 4;
+    string date = 5;
+}
+
+message CheckAvailabilityResponse {
+    repeated TimeSlot available_slots = 1;
+}
+
+message GetMasterScheduleRequest {
+    string master_id = 1;
+    string date_from = 2;
+    string date_to = 3;
+}
+
+message GetMasterScheduleResponse {
+    repeated Booking bookings = 1;
+    repeated TimeSlot available_slots = 2;
+}
+
+message CreateServiceRequest {
+    string tenant_id = 1;
+    string category = 2;
+    string name = 3;
+    string description = 4;
+    double base_price = 5;
+    int32 base_duration = 6;
+}
+
+message CreateServiceResponse {
+    string service_id = 1;
+    string message = 2;
+}
+
+message UpdateServiceRequest {
+    string service_id = 1;
+    string category = 2;
+    string name = 3;
+    string description = 4;
+    double base_price = 5;
+    int32 base_duration = 6;
+    bool is_active = 7;
+}
+
+message UpdateServiceResponse {
+    string message = 1;
+}
+
+message GetServicesRequest {
+    string tenant_id = 1;
+    string location_id = 2;
+    string category = 3;
+    bool active_only = 4;
+}
+
+message GetServicesResponse {
+    repeated Service services = 1;
+}
+
+message DeleteServiceRequest {
+    string service_id = 1;
+}
+
+message DeleteServiceResponse {
+    string message = 1;
+}
+
+message GetBookingStatisticsRequest {
+    string tenant_id = 1;
+    string location_id = 2;
+    string master_id = 3;
+    string date_from = 4;
+    string date_to = 5;
+}
+
+message GetBookingStatisticsResponse {
+    int32 total_bookings = 1;
+    int32 completed_bookings = 2;
+    int32 cancelled_bookings = 3;
+    double total_revenue = 4;
+    double average_rating = 5;
+    repeated DailyStats daily_stats = 6;
+}
+
+message Booking {
+    string id = 1;
+    string tenant_id = 2;
+    string location_id = 3;
+    string master_id = 4;
+    string service_id = 5;
+    string client_session_id = 6;
+    string client_name = 7;
+    string client_email = 8;
+    string client_phone = 9;
+    string booking_date = 10;
+    string booking_time = 11;
+    int32 duration = 12;
+    double price = 13;
+    string status = 14;
+    string client_notes = 15;
+    string master_notes = 16;
+    string cancellation_reason = 17;
+    string cancelled_by = 18;
+    string cancelled_at = 19;
+    string created_by = 20;
+    string confirmation_code = 21;
+    string created_at = 22;
+    string updated_at = 23;
+    
+    // Joined data
+    Master master = 24;
+    Service service = 25;
+    Location location = 26;
+}
+
+message Service {
+    string id = 1;
+    string tenant_id = 2;
+    string category = 3;
+    string name = 4;
+    string description = 5;
+    double base_price = 6;
+    int32 base_duration = 7;
+    bool is_active = 8;
+    int32 popularity_score = 9;
+}
+
+message Master {
+    string id = 1;
+    string user_id = 2;
+    string tenant_id = 3;
+    string location_id = 4;
+    string bio = 5;
+    string photo_url = 6;
+    string specialization = 7;
+    int32 experience_years = 8;
+    double rating = 9;
+    int32 total_reviews = 10;
+    bool is_visible = 11;
+    bool is_accepting_bookings = 12;
+    User user = 13;
+}
+
+message Location {
+    string id = 1;
+    string tenant_id = 2;
+    string name = 3;
+    string address = 4;
+    string city = 5;
+    string country = 6;
+    string phone = 7;
+    bool is_active = 8;
+}
+
+message User {
+    string id = 1;
+    string email = 2;
+    string phone = 3;
+    string first_name = 4;
+    string last_name = 5;
+    string role = 6;
+}
+
+message TimeSlot {
+    string start_time = 1;
+    string end_time = 2;
+    bool is_available = 3;
+}
+
+message DailyStats {
+    string date = 1;
+    int32 bookings_count = 2;
+    double revenue = 3;
+}
