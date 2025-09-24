@@ -65,3 +65,26 @@ setup: ## Initial setup for development
 	@cp .env.example .env || echo ".env already exists"
 	@echo "Please edit .env file with your configuration"
 	@echo "Then run: make dev"
+proto: ## Generate protobuf files
+	protoc --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		user-service/proto/user.proto
+	protoc --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		booking-service/proto/booking.proto
+	protoc --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		notification-service/proto/notification.proto
+	protoc --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		payment-service/proto/payment.proto
+	protoc --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		admin-service/proto/admin.proto
+	@echo "✅ Proto files generated successfully!"
+
+proto-install: ## Install protoc and Go plugins
+	sudo apt update && sudo apt install -y protobuf-compiler
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	@echo "✅ Protocol Buffers tools installed!"
