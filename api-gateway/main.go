@@ -17,7 +17,7 @@ import (
     "booking-platform/api-gateway/routes"
     "booking-platform/shared/config"
     "booking-platform/shared/database"
-    "booking-platform/shared/redis"
+    "booking-platform/shared/cache"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
     log.Println("Database connection established successfully")
 
     // Initialize Redis
-    err = redis.Initialize(cfg)
+    err = cache.Initialize(cfg)
     if err != nil {
         log.Fatal("Failed to initialize Redis:", err)
     }
