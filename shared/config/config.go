@@ -8,6 +8,9 @@ import (
 )
 
 type Config struct {
+    // Environment
+    Environment    string
+    
     // Domain Configuration
     BaseDomain     string
     MainDomain     string
@@ -131,6 +134,7 @@ type SSLConfig struct {
 
 func Load() *Config {
     config := &Config{
+        Environment: getEnv("ENVIRONMENT", "development"),
         BaseDomain:  getEnv("BASE_DOMAIN", "jazyl.tech"),
         MainDomain:  getEnv("MAIN_DOMAIN", "jazyl.tech"),
         AdminDomain: getEnv("ADMIN_DOMAIN", "admin.jazyl.tech"),

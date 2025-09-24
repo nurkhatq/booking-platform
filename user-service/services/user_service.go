@@ -4,7 +4,6 @@ import (
     "context"
     "crypto/rand"
     "database/sql"
-    "encoding/hex"
     "fmt"
     "math/big"
     "strings"
@@ -17,7 +16,6 @@ import (
     
     "booking-platform/shared/config"
     "booking-platform/shared/database"
-    "booking-platform/shared/cache"
     "booking-platform/shared/auth"
     "booking-platform/shared/models"
     pb "booking-platform/user-service/proto"

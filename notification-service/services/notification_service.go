@@ -6,7 +6,6 @@ import (
     "fmt"
     "net/smtp"
     "strings"
-    "time"
     
     "github.com/google/uuid"
     "google.golang.org/grpc/codes"

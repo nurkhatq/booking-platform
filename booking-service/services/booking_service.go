@@ -10,6 +10,7 @@ import (
     "time"
     
     "github.com/google/uuid"
+    "github.com/jmoiron/sqlx"
     "google.golang.org/grpc/codes"
     "google.golang.org/grpc/status"
     
@@ -403,7 +404,7 @@ func (s *BookingService) CancelBooking(ctx context.Context, req *pb.CancelBookin
 }
 
 // Helper functions
-func (s *BookingService) isTimeSlotAvailable(tx *database.Tx, masterID uuid.UUID, date time.Time, timeSlot string) (bool, error) {
+func (s *BookingService) isTimeSlotAvailable(tx *sqlx.Tx, masterID uuid.UUID, date time.Time, timeSlot string) (bool, error) {
     var count int
     err := tx.Get(&count, `
         SELECT COUNT(*) FROM bookings 
