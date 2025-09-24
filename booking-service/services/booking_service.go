@@ -554,17 +554,202 @@ type TimeSlot struct {
     IsAvailable bool
 }
 
-// Placeholder implementations for other methods
 func (s *BookingService) GetBooking(ctx context.Context, req *pb.GetBookingRequest) (*pb.GetBookingResponse, error) {
-    return nil, status.Error(codes.Unimplemented, "Not implemented yet")
+    db := database.GetDB()
+    
+    bookingID, err := uuid.Parse(req.BookingId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid booking ID")
+    }
+    
+    var booking models.Booking
+    err = db.Get(&booking, 
+        "SELECT * FROM bookings WHERE id = $1", 
+        bookingID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, status.Error(codes.NotFound, "Booking not found")
+        }
+        return nil, status.Error(codes.Internal, "Database error")
+    }
+    
+    // Get related data
+    var master models.Master
+    var service models.Service
+    var location models.Location
+    
+    // Get master info
+    err = db.Get(&master, 
+        "SELECT m.*, u.email, u.first_name, u.last_name, u.phone FROM masters m "+
+        "JOIN users u ON m.user_id = u.id WHERE m.id = $1", 
+        booking.MasterID)
+    if err != nil && err != sql.ErrNoRows {
+        return nil, status.Error(codes.Internal, "Failed to get master info")
+    }
+    
+    // Get service info
+    err = db.Get(&service, 
+        "SELECT * FROM services WHERE id = $1", 
+        booking.ServiceID)
+    if err != nil && err != sql.ErrNoRows {
+        return nil, status.Error(codes.Internal, "Failed to get service info")
+    }
+    
+    // Get location info
+    err = db.Get(&location, 
+        "SELECT * FROM locations WHERE id = $1", 
+        booking.LocationID)
+    if err != nil && err != sql.ErrNoRows {
+        return nil, status.Error(codes.Internal, "Failed to get location info")
+    }
+    
+    return &pb.GetBookingResponse{
+        Booking: bookingToProto(&booking, &master, &service, &location),
+    }, nil
 }
 
 func (s *BookingService) UpdateBooking(ctx context.Context, req *pb.UpdateBookingRequest) (*pb.UpdateBookingResponse, error) {
-    return nil, status.Error(codes.Unimplemented, "Not implemented yet")
+    db := database.GetDB()
+    
+    bookingID, err := uuid.Parse(req.BookingId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid booking ID")
+    }
+    
+    // Check if booking exists
+    var existingBooking models.Booking
+    err = db.Get(&existingBooking, 
+        "SELECT * FROM bookings WHERE id = $1", 
+        bookingID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, status.Error(codes.NotFound, "Booking not found")
+        }
+        return nil, status.Error(codes.Internal, "Database error")
+    }
+    
+    // Check if booking can be updated (not completed or cancelled)
+    if existingBooking.Status == models.BookingCompleted || existingBooking.Status == models.BookingCancelled {
+        return nil, status.Error(codes.FailedPrecondition, "Cannot update completed or cancelled booking")
+    }
+    
+    // Parse new date if provided
+    var newDate time.Time
+    if req.BookingDate != "" {
+        newDate, err = time.Parse("2006-01-02", req.BookingDate)
+        if err != nil {
+            return nil, status.Error(codes.InvalidArgument, "Invalid date format")
+        }
+    } else {
+        newDate = existingBooking.BookingDate
+    }
+    
+    // Validate time format if provided
+    if req.BookingTime != "" && !isValidTimeFormat(req.BookingTime) {
+        return nil, status.Error(codes.InvalidArgument, "Invalid time format")
+    }
+    
+    // Start transaction
+    tx, err := db.Beginx()
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to start transaction")
+    }
+    defer tx.Rollback()
+    
+    // Check availability if date/time changed
+    if req.BookingDate != "" || req.BookingTime != "" {
+        newTime := req.BookingTime
+        if newTime == "" {
+            newTime = existingBooking.BookingTime
+        }
+        
+        available, err := s.isTimeSlotAvailable(tx, existingBooking.MasterID, newDate, newTime)
+        if err != nil {
+            return nil, status.Error(codes.Internal, "Failed to check availability")
+        }
+        if !available {
+            return nil, status.Error(codes.FailedPrecondition, "Time slot not available")
+        }
+    }
+    
+    // Update booking
+    _, err = tx.Exec(`
+        UPDATE bookings 
+        SET booking_date = $1, 
+            booking_time = $2, 
+            client_notes = $3, 
+            master_notes = $4,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $5`,
+        newDate,
+        req.BookingTime,
+        req.ClientNotes,
+        req.MasterNotes,
+        bookingID)
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to update booking")
+    }
+    
+    // Clear availability cache
+    s.clearAvailabilityCache(existingBooking.MasterID, newDate)
+    if req.BookingDate != "" {
+        s.clearAvailabilityCache(existingBooking.MasterID, existingBooking.BookingDate)
+    }
+    
+    err = tx.Commit()
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to commit transaction")
+    }
+    
+    return &pb.UpdateBookingResponse{
+        Message: "Booking updated successfully",
+    }, nil
 }
 
 func (s *BookingService) CompleteBooking(ctx context.Context, req *pb.CompleteBookingRequest) (*pb.CompleteBookingResponse, error) {
-    return nil, status.Error(codes.Unimplemented, "Not implemented yet")
+    db := database.GetDB()
+    
+    bookingID, err := uuid.Parse(req.BookingId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid booking ID")
+    }
+    
+    // Check if booking exists and can be completed
+    var booking models.Booking
+    err = db.Get(&booking, 
+        "SELECT * FROM bookings WHERE id = $1", 
+        bookingID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, status.Error(codes.NotFound, "Booking not found")
+        }
+        return nil, status.Error(codes.Internal, "Database error")
+    }
+    
+    // Check if booking can be completed
+    if booking.Status == models.BookingCompleted {
+        return nil, status.Error(codes.FailedPrecondition, "Booking already completed")
+    }
+    if booking.Status == models.BookingCancelled {
+        return nil, status.Error(codes.FailedPrecondition, "Cannot complete cancelled booking")
+    }
+    
+    // Update booking status to completed
+    _, err = db.Exec(`
+        UPDATE bookings 
+        SET status = 'completed', 
+            master_notes = $1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2`,
+        req.MasterNotes,
+        bookingID)
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to complete booking")
+    }
+    
+    return &pb.CompleteBookingResponse{
+        Message: "Booking completed successfully",
+    }, nil
 }
 
 func (s *BookingService) GetMasterSchedule(ctx context.Context, req *pb.GetMasterScheduleRequest) (*pb.GetMasterScheduleResponse, error) {
@@ -572,7 +757,60 @@ func (s *BookingService) GetMasterSchedule(ctx context.Context, req *pb.GetMaste
 }
 
 func (s *BookingService) CreateService(ctx context.Context, req *pb.CreateServiceRequest) (*pb.CreateServiceResponse, error) {
-    return nil, status.Error(codes.Unimplemented, "Not implemented yet")
+    db := database.GetDB()
+    
+    tenantID, err := uuid.Parse(req.TenantId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid tenant ID")
+    }
+    
+    // Validate required fields
+    if req.Name == "" {
+        return nil, status.Error(codes.InvalidArgument, "Service name is required")
+    }
+    if req.BasePrice < 0 {
+        return nil, status.Error(codes.InvalidArgument, "Base price cannot be negative")
+    }
+    if req.BaseDuration <= 0 {
+        return nil, status.Error(codes.InvalidArgument, "Base duration must be positive")
+    }
+    
+    // Start transaction
+    tx, err := db.Beginx()
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to start transaction")
+    }
+    defer tx.Rollback()
+    
+    // Check if tenant exists
+    var tenantExists bool
+    err = tx.Get(&tenantExists, "SELECT EXISTS(SELECT 1 FROM tenants WHERE id = $1)", tenantID)
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Database error")
+    }
+    if !tenantExists {
+        return nil, status.Error(codes.NotFound, "Tenant not found")
+    }
+    
+    // Create service
+    serviceID := uuid.New()
+    _, err = tx.Exec(`
+        INSERT INTO services (id, tenant_id, category, name, description, base_price, base_duration, is_active, popularity_score)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, true, 0)`,
+        serviceID, tenantID, req.Category, req.Name, req.Description, req.BasePrice, req.BaseDuration)
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to create service")
+    }
+    
+    err = tx.Commit()
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to commit transaction")
+    }
+    
+    return &pb.CreateServiceResponse{
+        ServiceId: serviceID.String(),
+        Message:   "Service created successfully",
+    }, nil
 }
 
 func (s *BookingService) UpdateService(ctx context.Context, req *pb.UpdateServiceRequest) (*pb.UpdateServiceResponse, error) {
@@ -580,7 +818,73 @@ func (s *BookingService) UpdateService(ctx context.Context, req *pb.UpdateServic
 }
 
 func (s *BookingService) GetServices(ctx context.Context, req *pb.GetServicesRequest) (*pb.GetServicesResponse, error) {
-    return nil, status.Error(codes.Unimplemented, "Not implemented yet")
+    db := database.GetDB()
+    
+    tenantID, err := uuid.Parse(req.TenantId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid tenant ID")
+    }
+    
+    // Build query
+    query := "SELECT * FROM services WHERE tenant_id = $1"
+    args := []interface{}{tenantID}
+    argIndex := 2
+    
+    // Add location filter if provided
+    if req.LocationId != "" {
+        locationID, err := uuid.Parse(req.LocationId)
+        if err != nil {
+            return nil, status.Error(codes.InvalidArgument, "Invalid location ID")
+        }
+        
+        query += fmt.Sprintf(" AND id IN (SELECT service_id FROM location_services WHERE location_id = $%d)", argIndex)
+        args = append(args, locationID)
+        argIndex++
+    }
+    
+    // Add category filter if provided
+    if req.Category != "" {
+        query += fmt.Sprintf(" AND category = $%d", argIndex)
+        args = append(args, req.Category)
+        argIndex++
+    }
+    
+    // Add active filter if requested
+    if req.ActiveOnly {
+        query += fmt.Sprintf(" AND is_active = $%d", argIndex)
+        args = append(args, true)
+        argIndex++
+    }
+    
+    // Order by popularity and name
+    query += " ORDER BY popularity_score DESC, name ASC"
+    
+    // Execute query
+    var services []models.Service
+    err = db.Select(&services, query, args...)
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Database error")
+    }
+    
+    // Convert to proto
+    var protoServices []*pb.Service
+    for _, service := range services {
+        protoServices = append(protoServices, &pb.Service{
+            Id:              service.ID.String(),
+            TenantId:        service.TenantID.String(),
+            Category:        service.Category,
+            Name:            service.Name,
+            Description:     service.Description,
+            BasePrice:       service.BasePrice,
+            BaseDuration:    int32(service.BaseDuration),
+            IsActive:        service.IsActive,
+            PopularityScore: int32(service.PopularityScore),
+        })
+    }
+    
+    return &pb.GetServicesResponse{
+        Services: protoServices,
+    }, nil
 }
 
 func (s *BookingService) DeleteService(ctx context.Context, req *pb.DeleteServiceRequest) (*pb.DeleteServiceResponse, error) {

@@ -195,6 +195,15 @@ type LoginResponse struct {
     User         User   `json:"user"`
 }
 
+type RefreshTokenRequest struct {
+    RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+type RefreshTokenResponse struct {
+    Token        string `json:"token"`
+    RefreshToken string `json:"refresh_token"`
+}
+
 type TenantRegistrationRequest struct {
     BusinessName string       `json:"business_name" binding:"required"`
     BusinessType BusinessType `json:"business_type" binding:"required"`

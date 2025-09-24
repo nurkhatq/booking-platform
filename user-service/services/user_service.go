@@ -377,13 +377,74 @@ func locationToProto(location *models.Location) *pb.Location {
     }
 }
 
-// Placeholder implementations for other methods
 func (s *UserService) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequest) (*pb.RefreshTokenResponse, error) {
-    return nil, status.Error(codes.Unimplemented, "Not implemented yet")
+    // Validate refresh token
+    claims, err := auth.ValidateToken(req.RefreshToken)
+    if err != nil {
+        return nil, status.Error(codes.Unauthenticated, "Invalid refresh token")
+    }
+    
+    db := database.GetDB()
+    
+    // Verify user still exists and is active
+    var user models.User
+    err = db.Get(&user, 
+        "SELECT * FROM users WHERE id = $1 AND is_active = true", 
+        claims.UserID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, status.Error(codes.Unauthenticated, "User not found")
+        }
+        return nil, status.Error(codes.Internal, "Database error")
+    }
+    
+    // Generate new tokens
+    token, err := auth.GenerateToken(
+        user.ID.String(),
+        user.TenantID.String(),
+        string(user.Role),
+        user.Email,
+        s.config.JWT.Expiry,
+    )
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to generate token")
+    }
+    
+    refreshToken, err := auth.GenerateToken(
+        user.ID.String(),
+        user.TenantID.String(),
+        string(user.Role),
+        user.Email,
+        s.config.JWT.RefreshExpiry,
+    )
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to generate refresh token")
+    }
+    
+    return &pb.RefreshTokenResponse{
+        Token:        token,
+        RefreshToken: refreshToken,
+    }, nil
 }
 
 func (s *UserService) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.LogoutResponse, error) {
-    return nil, status.Error(codes.Unimplemented, "Not implemented yet")
+    // Validate token to get user info
+    claims, err := auth.ValidateToken(req.Token)
+    if err != nil {
+        return nil, status.Error(codes.Unauthenticated, "Invalid token")
+    }
+    
+    // In a real implementation, you might want to:
+    // 1. Add token to a blacklist
+    // 2. Remove from Redis cache
+    // 3. Log the logout event
+    
+    // For now, we'll just return success
+    // The client should discard the token locally
+    
+    return &pb.LogoutResponse{
+        Message: "Logged out successfully",
+    }, nil
 }
 
 func (s *UserService) UpdateBusinessInfo(ctx context.Context, req *pb.UpdateBusinessInfoRequest) (*pb.UpdateBusinessInfoResponse, error) {

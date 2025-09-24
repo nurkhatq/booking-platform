@@ -472,15 +472,207 @@ func tenantToProto(tenant *models.Tenant, owner interface{}, counts interface{})
 
 // Placeholder implementations for other methods
 func (s *AdminService) SuspendTenant(ctx context.Context, req *pb.SuspendTenantRequest) (*pb.SuspendTenantResponse, error) {
-    return nil, status.Error(codes.Unimplemented, "Not implemented yet")
+    db := database.GetDB()
+    
+    tenantID, err := uuid.Parse(req.TenantId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid tenant ID")
+    }
+    
+    // Start transaction
+    tx, err := db.Beginx()
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to start transaction")
+    }
+    defer tx.Rollback()
+    
+    // Check if tenant exists and is not already suspended
+    var tenant models.Tenant
+    err = tx.Get(&tenant, "SELECT * FROM tenants WHERE id = $1", tenantID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, status.Error(codes.NotFound, "Tenant not found")
+        }
+        return nil, status.Error(codes.Internal, "Database error")
+    }
+    
+    if tenant.Status == models.TenantSuspended {
+        return nil, status.Error(codes.FailedPrecondition, "Tenant is already suspended")
+    }
+    
+    // Suspend tenant
+    _, err = tx.Exec(`
+        UPDATE tenants 
+        SET status = 'suspended', updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1`,
+        tenantID)
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to suspend tenant")
+    }
+    
+    // Log admin action
+    adminID, err := uuid.Parse(req.AdminId)
+    if err == nil {
+        _, err = tx.Exec(`
+            INSERT INTO admin_actions (id, admin_id, action_type, target_type, target_id, details, created_at)
+            VALUES ($1, $2, 'suspend_tenant', 'tenant', $3, $4, CURRENT_TIMESTAMP)`,
+            uuid.New(), adminID, tenantID, fmt.Sprintf(`{"reason": "%s"}`, req.Reason))
+        if err != nil {
+            // Log error but don't fail the operation
+            fmt.Printf("Failed to log admin action: %v\n", err)
+        }
+    }
+    
+    err = tx.Commit()
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to commit transaction")
+    }
+    
+    return &pb.SuspendTenantResponse{
+        Message: "Tenant suspended successfully",
+    }, nil
 }
 
 func (s *AdminService) ReactivateTenant(ctx context.Context, req *pb.ReactivateTenantRequest) (*pb.ReactivateTenantResponse, error) {
-    return nil, status.Error(codes.Unimplemented, "Not implemented yet")
+    db := database.GetDB()
+    
+    tenantID, err := uuid.Parse(req.TenantId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid tenant ID")
+    }
+    
+    // Start transaction
+    tx, err := db.Beginx()
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to start transaction")
+    }
+    defer tx.Rollback()
+    
+    // Check if tenant exists and is suspended
+    var tenant models.Tenant
+    err = tx.Get(&tenant, "SELECT * FROM tenants WHERE id = $1", tenantID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, status.Error(codes.NotFound, "Tenant not found")
+        }
+        return nil, status.Error(codes.Internal, "Database error")
+    }
+    
+    if tenant.Status != models.TenantSuspended {
+        return nil, status.Error(codes.FailedPrecondition, "Tenant is not suspended")
+    }
+    
+    // Reactivate tenant
+    _, err = tx.Exec(`
+        UPDATE tenants 
+        SET status = 'active', updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1`,
+        tenantID)
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to reactivate tenant")
+    }
+    
+    // Log admin action
+    adminID, err := uuid.Parse(req.AdminId)
+    if err == nil {
+        _, err = tx.Exec(`
+            INSERT INTO admin_actions (id, admin_id, action_type, target_type, target_id, details, created_at)
+            VALUES ($1, $2, 'reactivate_tenant', 'tenant', $3, $4, CURRENT_TIMESTAMP)`,
+            uuid.New(), adminID, tenantID, fmt.Sprintf(`{"notes": "%s"}`, req.Notes))
+        if err != nil {
+            // Log error but don't fail the operation
+            fmt.Printf("Failed to log admin action: %v\n", err)
+        }
+    }
+    
+    err = tx.Commit()
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to commit transaction")
+    }
+    
+    return &pb.ReactivateTenantResponse{
+        Message: "Tenant reactivated successfully",
+    }, nil
 }
 
 func (s *AdminService) GetTenantDetails(ctx context.Context, req *pb.GetTenantDetailsRequest) (*pb.GetTenantDetailsResponse, error) {
-    return nil, status.Error(codes.Unimplemented, "Not implemented yet")
+    db := database.GetDB()
+    
+    tenantID, err := uuid.Parse(req.TenantId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid tenant ID")
+    }
+    
+    // Get tenant info
+    var tenant models.Tenant
+    err = db.Get(&tenant, "SELECT * FROM tenants WHERE id = $1", tenantID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, status.Error(codes.NotFound, "Tenant not found")
+        }
+        return nil, status.Error(codes.Internal, "Database error")
+    }
+    
+    // Get owner info
+    var owner models.User
+    if tenant.OwnerID != nil {
+        err = db.Get(&owner, "SELECT * FROM users WHERE id = $1", *tenant.OwnerID)
+        if err != nil && err != sql.ErrNoRows {
+            return nil, status.Error(codes.Internal, "Failed to get owner info")
+        }
+    }
+    
+    // Get counts
+    var counts struct {
+        LocationsCount int `db:"locations_count"`
+        MastersCount   int `db:"masters_count"`
+        ServicesCount  int `db:"services_count"`
+    }
+    
+    err = db.Get(&counts, `
+        SELECT 
+            (SELECT COUNT(*) FROM locations WHERE tenant_id = $1) as locations_count,
+            (SELECT COUNT(*) FROM masters WHERE tenant_id = $1) as masters_count,
+            (SELECT COUNT(*) FROM services WHERE tenant_id = $1) as services_count`,
+        tenantID)
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to get tenant counts")
+    }
+    
+    // Get tenant statistics
+    var stats models.TenantStats
+    err = db.Get(&stats, `
+        SELECT 
+            COUNT(*) as total_bookings,
+            COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_bookings,
+            COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_bookings,
+            COALESCE(SUM(price), 0) as total_revenue,
+            COALESCE(AVG(price), 0) as avg_booking_value
+        FROM bookings 
+        WHERE tenant_id = $1`,
+        tenantID)
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to get tenant statistics")
+    }
+    
+    // Convert to proto
+    protoTenant := tenantToProto(&tenant, &owner, &counts)
+    protoStats := &pb.TenantStats{
+        TotalBookings:         stats.TotalBookings,
+        CompletedBookings:     stats.CompletedBookings,
+        CancelledBookings:     stats.CancelledBookings,
+        TotalRevenue:          stats.TotalRevenue,
+        AvgBookingValue:       stats.AvgBookingValue,
+        TotalClients:          stats.TotalClients,
+        ActiveMasters:         stats.ActiveMasters,
+        MostPopularService:    stats.MostPopularService,
+        CustomerRetentionRate: stats.CustomerRetentionRate,
+    }
+    
+    return &pb.GetTenantDetailsResponse{
+        Tenant: protoTenant,
+        Stats:  protoStats,
+    }, nil
 }
 
 func (s *AdminService) UpdateTenantTrial(ctx context.Context, req *pb.UpdateTenantTrialRequest) (*pb.UpdateTenantTrialResponse, error) {
