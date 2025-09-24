@@ -246,3 +246,15 @@ type VerifyCodeResponse struct {
     Token   string `json:"token"`
     Message string `json:"message"`
 }
+
+type TenantStats struct {
+    TotalBookings         int32   `json:"total_bookings" db:"total_bookings"`
+    CompletedBookings     int32   `json:"completed_bookings" db:"completed_bookings"`
+    CancelledBookings     int32   `json:"cancelled_bookings" db:"cancelled_bookings"`
+    TotalRevenue          float64 `json:"total_revenue" db:"total_revenue"`
+    AvgBookingValue       float64 `json:"avg_booking_value" db:"avg_booking_value"`
+    TotalClients          int32   `json:"total_clients" db:"total_clients"`
+    ActiveMasters         int32   `json:"active_masters" db:"active_masters"`
+    MostPopularService    string  `json:"most_popular_service" db:"most_popular_service"`
+    CustomerRetentionRate float64 `json:"customer_retention_rate" db:"customer_retention_rate"`
+}

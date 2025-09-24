@@ -16,7 +16,6 @@ import (
     
     "booking-platform/shared/config"
     "booking-platform/shared/database"
-    "booking-platform/shared/cache"
     "booking-platform/shared/models"
     pb "booking-platform/booking-service/proto"
 )
@@ -36,11 +35,41 @@ func (s *BookingService) CreateBooking(ctx context.Context, req *pb.CreateBookin
     db := database.GetDB()
     
     // Parse UUIDs
-    tenantUUID, _ := uuid.Parse(req.TenantId)
-    locationUUID, _ := uuid.Parse(req.LocationId)
-    masterUUID, _ := uuid.Parse(req.MasterId)
-    serviceUUID, _ := uuid.Parse(req.ServiceId)
-    clientSessionUUID, _ := uuid.Parse(req.ClientSessionId)
+    tenantID, err := uuid.Parse(req.TenantId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid tenant ID")
+    }
+    
+    locationID, err := uuid.Parse(req.LocationId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid location ID")
+    }
+    
+    masterID, err := uuid.Parse(req.MasterId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid master ID")
+    }
+    
+    serviceID, err := uuid.Parse(req.ServiceId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid service ID")
+    }
+    
+    clientSessionID, err := uuid.Parse(req.ClientSessionId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid client session ID")
+    }
+    
+    // Parse booking date
+    bookingDate, err := time.Parse("2006-01-02", req.BookingDate)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid date format")
+    }
+    
+    // Validate time format
+    if !isValidTimeFormat(req.BookingTime) {
+        return nil, status.Error(codes.InvalidArgument, "Invalid time format")
+    }
     
     // Start transaction
     tx, err := db.Beginx()
@@ -49,95 +78,49 @@ func (s *BookingService) CreateBooking(ctx context.Context, req *pb.CreateBookin
     }
     defer tx.Rollback()
     
-    // Parse booking date and time
-    bookingDate, err := time.Parse("2006-01-02", req.BookingDate)
-    if err != nil {
-        return nil, status.Error(codes.InvalidArgument, "Invalid booking date format")
-    }
-    
-    // Validate booking time format (HH:MM)
-    if !isValidTimeFormat(req.BookingTime) {
-        return nil, status.Error(codes.InvalidArgument, "Invalid booking time format")
-    }
-    
-    // Check if the time slot is available
-    available, err := s.isTimeSlotAvailable(tx, masterUUID, bookingDate, req.BookingTime)
+    // Check if time slot is available
+    available, err := s.isTimeSlotAvailable(tx, masterID, bookingDate, req.BookingTime)
     if err != nil {
         return nil, status.Error(codes.Internal, "Failed to check availability")
     }
     if !available {
-        return nil, status.Error(codes.AlreadyExists, "Time slot is already booked")
+        return nil, status.Error(codes.FailedPrecondition, "Time slot not available")
     }
     
-    // Get service information for pricing and duration
+    // Get service details for price and duration
     var service models.Service
-    err = tx.Get(&service, "SELECT * FROM services WHERE id = $1 AND tenant_id = $2", serviceUUID, tenantUUID)
+    err = tx.Get(&service, "SELECT * FROM services WHERE id = $1 AND is_active = true", serviceID)
     if err != nil {
         if err == sql.ErrNoRows {
             return nil, status.Error(codes.NotFound, "Service not found")
         }
-        return nil, status.Error(codes.Internal, "Failed to get service")
+        return nil, status.Error(codes.Internal, "Database error")
     }
-    
-    // Check for master-specific pricing
-    var masterService struct {
-        Price    *float64 `db:"price"`
-        Duration *int     `db:"duration"`
-    }
-    err = tx.Get(&masterService, 
-        "SELECT price, duration FROM master_services WHERE master_id = $1 AND service_id = $2",
-        masterUUID, serviceUUID)
-    
-    price := service.BasePrice
-    duration := service.BaseDuration
-    
-    if err == nil {
-        // Use master-specific pricing if available
-        if masterService.Price != nil {
-            price = *masterService.Price
-        }
-        if masterService.Duration != nil {
-            duration = *masterService.Duration
-        }
-    }
-    
-    // Generate confirmation code
-    confirmationCode := generateConfirmationCode()
     
     // Create booking
     bookingID := uuid.New()
+    confirmationCode := generateConfirmationCode()
+    
     _, err = tx.Exec(`
         INSERT INTO bookings (
             id, tenant_id, location_id, master_id, service_id, client_session_id,
             client_name, client_email, client_phone, booking_date, booking_time,
             duration, price, status, client_notes, created_by, confirmation_code
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-        bookingID, tenantUUID, locationUUID, masterUUID, serviceUUID, clientSessionUUID,
+        bookingID, tenantID, locationID, masterID, serviceID, clientSessionID,
         req.ClientName, req.ClientEmail, req.ClientPhone, bookingDate, req.BookingTime,
-        duration, price, "confirmed", req.ClientNotes, req.CreatedBy, confirmationCode)
-    
+        service.BaseDuration, service.BasePrice, models.BookingPending, req.ClientNotes, req.CreatedBy, confirmationCode)
     if err != nil {
         return nil, status.Error(codes.Internal, "Failed to create booking")
     }
     
-    // Update service popularity
-    _, err = tx.Exec(
-        "UPDATE services SET popularity_score = popularity_score + 1 WHERE id = $1",
-        serviceUUID)
-    if err != nil {
-        // Log error but don't fail the booking
-        fmt.Printf("Failed to update service popularity: %v\n", err)
-    }
+    // Clear availability cache
+    s.clearAvailabilityCache(masterID, bookingDate)
     
-    // Commit transaction
-    if err = tx.Commit(); err != nil {
+    err = tx.Commit()
+    if err != nil {
         return nil, status.Error(codes.Internal, "Failed to commit transaction")
     }
-    
-    // Clear availability cache
-    s.clearAvailabilityCache(masterUUID, bookingDate)
-    
-    // TODO: Send confirmation notification
     
     return &pb.CreateBookingResponse{
         BookingId:        bookingID.String(),
@@ -149,191 +132,138 @@ func (s *BookingService) CreateBooking(ctx context.Context, req *pb.CreateBookin
 func (s *BookingService) GetBookings(ctx context.Context, req *pb.GetBookingsRequest) (*pb.GetBookingsResponse, error) {
     db := database.GetDB()
     
-    // Build query dynamically based on filters
-    query := `
-        SELECT b.*, 
-               m.bio, m.photo_url, m.specialization, m.experience_years, m.rating, m.total_reviews,
-               u.first_name, u.last_name, u.email as master_email, u.phone as master_phone,
-               s.name as service_name, s.category, s.description,
-               l.name as location_name, l.address, l.city
-        FROM bookings b
-        LEFT JOIN masters m ON b.master_id = m.id
-        LEFT JOIN users u ON m.user_id = u.id
-        LEFT JOIN services s ON b.service_id = s.id
-        LEFT JOIN locations l ON b.location_id = l.id
-        WHERE 1=1`
-    
-    args := []interface{}{}
-    argCount := 0
-    
-    if req.TenantId != "" {
-        argCount++
-        query += fmt.Sprintf(" AND b.tenant_id = $%d", argCount)
-        args = append(args, req.TenantId)
+    tenantID, err := uuid.Parse(req.TenantId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid tenant ID")
     }
     
+    // Build query
+    query := "SELECT * FROM bookings WHERE tenant_id = $1"
+    args := []interface{}{tenantID}
+    argIndex := 2
+    
+    // Add filters
     if req.LocationId != "" {
-        argCount++
-        query += fmt.Sprintf(" AND b.location_id = $%d", argCount)
-        args = append(args, req.LocationId)
+        locationID, err := uuid.Parse(req.LocationId)
+        if err != nil {
+            return nil, status.Error(codes.InvalidArgument, "Invalid location ID")
+        }
+        query += fmt.Sprintf(" AND location_id = $%d", argIndex)
+        args = append(args, locationID)
+        argIndex++
     }
     
     if req.MasterId != "" {
-        argCount++
-        query += fmt.Sprintf(" AND b.master_id = $%d", argCount)
-        args = append(args, req.MasterId)
+        masterID, err := uuid.Parse(req.MasterId)
+        if err != nil {
+            return nil, status.Error(codes.InvalidArgument, "Invalid master ID")
+        }
+        query += fmt.Sprintf(" AND master_id = $%d", argIndex)
+        args = append(args, masterID)
+        argIndex++
     }
     
     if req.ClientEmail != "" {
-        argCount++
-        query += fmt.Sprintf(" AND b.client_email = $%d", argCount)
+        query += fmt.Sprintf(" AND client_email = $%d", argIndex)
         args = append(args, req.ClientEmail)
+        argIndex++
     }
     
     if req.Status != "" {
-        argCount++
-        query += fmt.Sprintf(" AND b.status = $%d", argCount)
+        query += fmt.Sprintf(" AND status = $%d", argIndex)
         args = append(args, req.Status)
+        argIndex++
     }
     
     if req.DateFrom != "" {
-        argCount++
-        query += fmt.Sprintf(" AND b.booking_date >= $%d", argCount)
+        query += fmt.Sprintf(" AND booking_date >= $%d", argIndex)
         args = append(args, req.DateFrom)
+        argIndex++
     }
     
     if req.DateTo != "" {
-        argCount++
-        query += fmt.Sprintf(" AND b.booking_date <= $%d", argCount)
+        query += fmt.Sprintf(" AND booking_date <= $%d", argIndex)
         args = append(args, req.DateTo)
+        argIndex++
+    }
+    
+    // Add pagination
+    limit := req.Limit
+    if limit <= 0 {
+        limit = 20
+    }
+    if limit > 100 {
+        limit = 100
+    }
+    
+    offset := (req.Page - 1) * limit
+    if offset < 0 {
+        offset = 0
+    }
+    
+    query += fmt.Sprintf(" ORDER BY booking_date DESC, booking_time DESC LIMIT $%d OFFSET $%d", argIndex, argIndex+1)
+    args = append(args, limit, offset)
+    
+    // Execute query
+    var bookings []models.Booking
+    err = db.Select(&bookings, query, args...)
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Database error")
     }
     
     // Get total count
-    countQuery := strings.Replace(query, 
-        "SELECT b.*, m.bio, m.photo_url, m.specialization, m.experience_years, m.rating, m.total_reviews, u.first_name, u.last_name, u.email as master_email, u.phone as master_phone, s.name as service_name, s.category, s.description, l.name as location_name, l.address, l.city FROM bookings b LEFT JOIN masters m ON b.master_id = m.id LEFT JOIN users u ON m.user_id = u.id LEFT JOIN services s ON b.service_id = s.id LEFT JOIN locations l ON b.location_id = l.id",
-        "SELECT COUNT(*) FROM bookings b LEFT JOIN masters m ON b.master_id = m.id LEFT JOIN users u ON m.user_id = u.id LEFT JOIN services s ON b.service_id = s.id LEFT JOIN locations l ON b.location_id = l.id", 1)
+    countQuery := strings.Split(query, " ORDER BY")[0]
+    countQuery = strings.Replace(countQuery, "SELECT *", "SELECT COUNT(*)", 1)
+    countQuery = strings.Replace(countQuery, fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIndex, argIndex+1), "", 1)
     
-    var total int
-    err := db.Get(&total, countQuery, args...)
+    var total int32
+    err = db.Get(&total, countQuery, args[:len(args)-2]...)
     if err != nil {
         return nil, status.Error(codes.Internal, "Failed to get total count")
     }
     
-    // Add pagination
-    query += " ORDER BY b.booking_date DESC, b.booking_time DESC"
-    
-    if req.Limit > 0 {
-        argCount++
-        query += fmt.Sprintf(" LIMIT $%d", argCount)
-        args = append(args, req.Limit)
-        
-        if req.Page > 0 {
-            offset := (req.Page - 1) * req.Limit
-            argCount++
-            query += fmt.Sprintf(" OFFSET $%d", argCount)
-            args = append(args, offset)
-        }
-    }
-    
-    // Execute query
-    rows, err := db.Query(query, args...)
-    if err != nil {
-        return nil, status.Error(codes.Internal, "Failed to get bookings")
-    }
-    defer rows.Close()
-    
-    var bookings []*pb.Booking
-    for rows.Next() {
-        var booking models.Booking
-        var master struct {
-            Bio             *string  `db:"bio"`
-            PhotoURL        *string  `db:"photo_url"`
-            Specialization  *string  `db:"specialization"`
-            ExperienceYears int      `db:"experience_years"`
-            Rating          float64  `db:"rating"`
-            TotalReviews    int      `db:"total_reviews"`
-            FirstName       *string  `db:"first_name"`
-            LastName        *string  `db:"last_name"`
-            Email           string   `db:"master_email"`
-            Phone           *string  `db:"master_phone"`
-        }
-        var service struct {
-            Name        string  `db:"service_name"`
-            Category    string  `db:"category"`
-            Description *string `db:"description"`
-        }
-        var location struct {
-            Name    string `db:"location_name"`
-            Address string `db:"address"`
-            City    string `db:"city"`
-        }
-        
-        err := rows.Scan(
-            &booking.ID, &booking.TenantID, &booking.LocationID, &booking.MasterID, &booking.ServiceID,
-            &booking.ClientSessionID, &booking.ClientName, &booking.ClientEmail, &booking.ClientPhone,
-            &booking.BookingDate, &booking.BookingTime, &booking.Duration, &booking.Price, &booking.Status,
-            &booking.ClientNotes, &booking.MasterNotes, &booking.CancellationReason, &booking.CancelledBy,
-            &booking.CancelledAt, &booking.CreatedBy, &booking.ConfirmationCode, &booking.ReminderSent24h,
-            &booking.ReminderSent2h, &booking.CreatedAt, &booking.UpdatedAt,
-            &master.Bio, &master.PhotoURL, &master.Specialization, &master.ExperienceYears,
-            &master.Rating, &master.TotalReviews, &master.FirstName, &master.LastName,
-            &master.Email, &master.Phone, &service.Name, &service.Category, &service.Description,
-            &location.Name, &location.Address, &location.City)
-        
-        if err != nil {
-            return nil, status.Error(codes.Internal, "Failed to scan booking")
-        }
-        
-        bookings = append(bookings, bookingToProto(&booking, &master, &service, &location))
+    // Convert to proto
+    var protoBookings []*pb.Booking
+    for _, booking := range bookings {
+        protoBookings = append(protoBookings, bookingToProto(&booking, nil, nil, nil))
     }
     
     return &pb.GetBookingsResponse{
-        Bookings: bookings,
-        Total:    int32(total),
+        Bookings: protoBookings,
+        Total:    total,
         Page:     req.Page,
-        Limit:    req.Limit,
+        Limit:    limit,
     }, nil
 }
 
 func (s *BookingService) CheckAvailability(ctx context.Context, req *pb.CheckAvailabilityRequest) (*pb.CheckAvailabilityResponse, error) {
-    // Parse date
+    db := database.GetDB()
+    
+    masterID, err := uuid.Parse(req.MasterId)
+    if err != nil {
+        return nil, status.Error(codes.InvalidArgument, "Invalid master ID")
+    }
+    
     date, err := time.Parse("2006-01-02", req.Date)
     if err != nil {
         return nil, status.Error(codes.InvalidArgument, "Invalid date format")
     }
     
-    masterUUID, _ := uuid.Parse(req.MasterId)
-    
-    // Check cache first
-    cacheKey := fmt.Sprintf("availability:%s:%s", req.MasterId, req.Date)
-    var cachedSlots []*pb.TimeSlot
-    
-    if cache.Exists(ctx, cacheKey) {
-        if err := cache.Get(ctx, cacheKey, &cachedSlots); err == nil {
-            return &pb.CheckAvailabilityResponse{
-                AvailableSlots: cachedSlots,
-            }, nil
-        }
-    }
-    
     // Get available time slots
-    slots, err := s.getAvailableTimeSlots(masterUUID, date)
+    slots, err := s.getAvailableTimeSlots(masterID, date)
     if err != nil {
-        return nil, status.Error(codes.Internal, "Failed to get availability")
+        return nil, status.Error(codes.Internal, "Failed to get available slots")
     }
     
     // Convert to proto
-    protoSlots := make([]*pb.TimeSlot, len(slots))
-    for i, slot := range slots {
-        protoSlots[i] = &pb.TimeSlot{
+    var protoSlots []*pb.TimeSlot
+    for _, slot := range slots {
+        protoSlots = append(protoSlots, &pb.TimeSlot{
             StartTime:   slot.StartTime,
             EndTime:     slot.EndTime,
             IsAvailable: slot.IsAvailable,
-        }
+        })
     }
-    
-    // Cache for 5 minutes
-    cache.Set(ctx, cacheKey, protoSlots, 5*time.Minute)
     
     return &pb.CheckAvailabilityResponse{
         AvailableSlots: protoSlots,
@@ -343,52 +273,45 @@ func (s *BookingService) CheckAvailability(ctx context.Context, req *pb.CheckAva
 func (s *BookingService) CancelBooking(ctx context.Context, req *pb.CancelBookingRequest) (*pb.CancelBookingResponse, error) {
     db := database.GetDB()
     
-    bookingUUID, err := uuid.Parse(req.BookingId)
+    bookingID, err := uuid.Parse(req.BookingId)
     if err != nil {
         return nil, status.Error(codes.InvalidArgument, "Invalid booking ID")
     }
     
-    // Get booking details
+    // Start transaction
+    tx, err := db.Beginx()
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to start transaction")
+    }
+    defer tx.Rollback()
+    
+    // Check if booking exists and can be cancelled
     var booking models.Booking
-    err = db.Get(&booking, "SELECT * FROM bookings WHERE id = $1", bookingUUID)
+    err = tx.Get(&booking, "SELECT * FROM bookings WHERE id = $1", bookingID)
     if err != nil {
         if err == sql.ErrNoRows {
             return nil, status.Error(codes.NotFound, "Booking not found")
         }
-        return nil, status.Error(codes.Internal, "Failed to get booking")
+        return nil, status.Error(codes.Internal, "Database error")
     }
     
-    // Check if booking can be cancelled
     if booking.Status == models.BookingCancelled {
-        return nil, status.Error(codes.FailedPrecondition, "Booking is already cancelled")
+        return nil, status.Error(codes.FailedPrecondition, "Booking already cancelled")
     }
-    
     if booking.Status == models.BookingCompleted {
         return nil, status.Error(codes.FailedPrecondition, "Cannot cancel completed booking")
     }
     
-    // Check cancellation policy (2 hours before appointment)
-    bookingDateTime := time.Date(
-        booking.BookingDate.Year(), booking.BookingDate.Month(), booking.BookingDate.Day(),
-        parseTimeHour(booking.BookingTime), parseTimeMinute(booking.BookingTime), 0, 0,
-        time.UTC)
-    
-    if time.Now().Add(time.Duration(s.config.Business.CancellationHours)*time.Hour).After(bookingDateTime) {
-        // Only owners/managers can cancel within cancellation window
-        if req.CancelledBy != "OWNER" && req.CancelledBy != "MANAGER" {
-            return nil, status.Error(codes.FailedPrecondition, 
-                fmt.Sprintf("Cannot cancel booking less than %d hours before appointment", s.config.Business.CancellationHours))
-        }
-    }
-    
-    // Update booking
-    now := time.Now()
-    _, err = db.Exec(`
+    // Update booking status to cancelled
+    _, err = tx.Exec(`
         UPDATE bookings 
-        SET status = 'cancelled', cancellation_reason = $1, cancelled_by = $2, cancelled_at = $3, updated_at = $4
-        WHERE id = $5`,
-        req.Reason, req.CancelledBy, now, now, bookingUUID)
-    
+        SET status = 'cancelled', 
+            cancellation_reason = $1, 
+            cancelled_by = $2, 
+            cancelled_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3`,
+        req.Reason, req.CancelledBy, bookingID)
     if err != nil {
         return nil, status.Error(codes.Internal, "Failed to cancel booking")
     }
@@ -396,21 +319,24 @@ func (s *BookingService) CancelBooking(ctx context.Context, req *pb.CancelBookin
     // Clear availability cache
     s.clearAvailabilityCache(booking.MasterID, booking.BookingDate)
     
-    // TODO: Send cancellation notification
+    err = tx.Commit()
+    if err != nil {
+        return nil, status.Error(codes.Internal, "Failed to commit transaction")
+    }
     
     return &pb.CancelBookingResponse{
         Message: "Booking cancelled successfully",
     }, nil
 }
 
-// Helper functions
 func (s *BookingService) isTimeSlotAvailable(tx *sqlx.Tx, masterID uuid.UUID, date time.Time, timeSlot string) (bool, error) {
+    // Check if there's already a booking for this master at this time
     var count int
     err := tx.Get(&count, `
         SELECT COUNT(*) FROM bookings 
-        WHERE master_id = $1 AND booking_date = $2 AND booking_time = $3 AND status != 'cancelled'`,
+        WHERE master_id = $1 AND booking_date = $2 AND booking_time = $3 
+        AND status IN ('pending', 'confirmed')`,
         masterID, date, timeSlot)
-    
     if err != nil {
         return false, err
     }
@@ -419,59 +345,51 @@ func (s *BookingService) isTimeSlotAvailable(tx *sqlx.Tx, masterID uuid.UUID, da
 }
 
 func (s *BookingService) getAvailableTimeSlots(masterID uuid.UUID, date time.Time) ([]TimeSlot, error) {
-    db := database.GetDB()
+    // Generate time slots from 9:00 to 18:00 (30-minute intervals)
+    var slots []TimeSlot
     
-    // Get existing bookings for the day
-    var bookings []string
-    err := db.Select(&bookings, `
-        SELECT booking_time FROM bookings 
-        WHERE master_id = $1 AND booking_date = $2 AND status != 'cancelled'`,
-        masterID, date)
-    
-    if err != nil {
-        return nil, err
-    }
-    
-    // Generate time slots (9:00 to 18:00, 30-minute intervals)
-    slots := []TimeSlot{}
-    start := 9 * 60  // 9:00 AM in minutes
-    end := 18 * 60   // 6:00 PM in minutes
-    interval := 30   // 30 minutes
-    
-    for minutes := start; minutes < end; minutes += interval {
-        timeStr := fmt.Sprintf("%02d:%02d", minutes/60, minutes%60)
-        
-        // Check if this slot is booked
-        isAvailable := true
-        for _, bookedTime := range bookings {
-            if bookedTime == timeStr {
-                isAvailable = false
-                break
+    for hour := 9; hour < 18; hour++ {
+        for minute := 0; minute < 60; minute += 30 {
+            startTime := fmt.Sprintf("%02d:%02d", hour, minute)
+            endHour := hour
+            endMinute := minute + 30
+            if endMinute >= 60 {
+                endHour++
+                endMinute = 0
             }
+            endTime := fmt.Sprintf("%02d:%02d", endHour, endMinute)
+            
+            // Check if slot is available
+            db := database.GetDB()
+            var count int
+            err := db.Get(&count, `
+                SELECT COUNT(*) FROM bookings 
+                WHERE master_id = $1 AND booking_date = $2 AND booking_time = $3 
+                AND status IN ('pending', 'confirmed')`,
+                masterID, date, startTime)
+            if err != nil {
+                return nil, err
+            }
+            
+            slots = append(slots, TimeSlot{
+                StartTime:   startTime,
+                EndTime:     endTime,
+                IsAvailable: count == 0,
+            })
         }
-        
-        slots = append(slots, TimeSlot{
-            StartTime:   timeStr,
-            EndTime:     fmt.Sprintf("%02d:%02d", (minutes+interval)/60, (minutes+interval)%60),
-            IsAvailable: isAvailable,
-        })
     }
     
     return slots, nil
 }
 
 func (s *BookingService) clearAvailabilityCache(masterID uuid.UUID, date time.Time) {
-    cacheKey := fmt.Sprintf("availability:%s:%s", masterID.String(), date.Format("2006-01-02"))
-    cache.Delete(context.Background(), cacheKey)
+    // In a real implementation, you would clear Redis cache here
+    // For now, we'll just log it
+    fmt.Printf("Clearing availability cache for master %s on %s\n", masterID, date.Format("2006-01-02"))
 }
 
 func generateConfirmationCode() string {
-    const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    code := make([]byte, 6)
-    for i := range code {
-        code[i] = charset[rand.Intn(len(charset))]
-    }
-    return string(code)
+    return fmt.Sprintf("%06d", rand.Intn(1000000))
 }
 
 func isValidTimeFormat(timeStr string) bool {
@@ -480,10 +398,17 @@ func isValidTimeFormat(timeStr string) bool {
         return false
     }
     
-    hour, err1 := strconv.Atoi(parts[0])
-    minute, err2 := strconv.Atoi(parts[1])
+    hour, err := strconv.Atoi(parts[0])
+    if err != nil || hour < 0 || hour > 23 {
+        return false
+    }
     
-    return err1 == nil && err2 == nil && hour >= 0 && hour < 24 && minute >= 0 && minute < 60
+    minute, err := strconv.Atoi(parts[1])
+    if err != nil || minute < 0 || minute > 59 {
+        return false
+    }
+    
+    return true
 }
 
 func parseTimeHour(timeStr string) int {
@@ -499,24 +424,32 @@ func parseTimeMinute(timeStr string) int {
 }
 
 func bookingToProto(booking *models.Booking, master interface{}, service interface{}, location interface{}) *pb.Booking {
+    var clientNotes string
+    if booking.ClientNotes != nil {
+        clientNotes = *booking.ClientNotes
+    }
+    
+    var masterNotes string
+    if booking.MasterNotes != nil {
+        masterNotes = *booking.MasterNotes
+    }
+    
+    var cancellationReason string
+    if booking.CancellationReason != nil {
+        cancellationReason = *booking.CancellationReason
+    }
+    
+    var cancelledBy string
+    if booking.CancelledBy != nil {
+        cancelledBy = *booking.CancelledBy
+    }
+    
     var cancelledAt string
     if booking.CancelledAt != nil {
         cancelledAt = booking.CancelledAt.Format(time.RFC3339)
     }
     
-    var clientNotes, masterNotes, cancellationReason, cancelledBy, confirmationCode string
-    if booking.ClientNotes != nil {
-        clientNotes = *booking.ClientNotes
-    }
-    if booking.MasterNotes != nil {
-        masterNotes = *booking.MasterNotes
-    }
-    if booking.CancellationReason != nil {
-        cancellationReason = *booking.CancellationReason
-    }
-    if booking.CancelledBy != nil {
-        cancelledBy = *booking.CancelledBy
-    }
+    var confirmationCode string
     if booking.ConfirmationCode != nil {
         confirmationCode = *booking.ConfirmationCode
     }
@@ -869,12 +802,17 @@ func (s *BookingService) GetServices(ctx context.Context, req *pb.GetServicesReq
     // Convert to proto
     var protoServices []*pb.Service
     for _, service := range services {
+        var description string
+        if service.Description != nil {
+            description = *service.Description
+        }
+        
         protoServices = append(protoServices, &pb.Service{
             Id:              service.ID.String(),
             TenantId:        service.TenantID.String(),
             Category:        service.Category,
             Name:            service.Name,
-            Description:     service.Description,
+            Description:     description,
             BasePrice:       service.BasePrice,
             BaseDuration:    int32(service.BaseDuration),
             IsActive:        service.IsActive,
