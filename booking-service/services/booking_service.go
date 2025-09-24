@@ -237,8 +237,6 @@ func (s *BookingService) GetBookings(ctx context.Context, req *pb.GetBookingsReq
 }
 
 func (s *BookingService) CheckAvailability(ctx context.Context, req *pb.CheckAvailabilityRequest) (*pb.CheckAvailabilityResponse, error) {
-    db := database.GetDB()
-    
     masterID, err := uuid.Parse(req.MasterId)
     if err != nil {
         return nil, status.Error(codes.InvalidArgument, "Invalid master ID")
