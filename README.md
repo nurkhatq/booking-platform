@@ -1,361 +1,457 @@
-# Booking Platform Backend
+# Booking Platform - Python + WhatsApp Edition 🐍📱
 
-A comprehensive production-ready multi-tenant booking platform backend built with Go, featuring microservices architecture, gRPC communication, and background job processing.
+Полнофункциональная платформа для бронирования услуг с интеграцией WhatsApp вместо email уведомлений. Построена на Python (FastAPI) и Node.js (для WhatsApp).
 
-## Features
+## 🚀 Основные возможности
 
-- **Multi-tenant Architecture**: Support for multiple businesses with subdomain-based routing
-- **Multi-location Support**: Businesses can have multiple branches/locations
-- **Role-based Access Control**: Owner, Manager, Master, Client, and Super Admin roles
-- **Internationalization**: Support for English, Russian, and Kazakh languages
-- **Background Job Processing**: Email notifications, SMS, reminders, and analytics
-- **Real-time Availability**: Redis-cached booking availability system
-- **Comprehensive API**: RESTful HTTP API with gRPC internal communication
-- **Production Ready**: Docker containerization with health checks and monitoring
+- **Multi-tenant архитектура**: Поддержка множества бизнесов с поддоменами
+- **WhatsApp уведомления**: Автоматическая отправка уведомлений через WhatsApp
+- **Микросервисная архитектура**: 6 независимых Python сервисов + WhatsApp сервис на Node.js
+- **Управление бронированиями**: Полный цикл бронирования от создания до завершения
+- **Роли пользователей**: SUPER_ADMIN, OWNER, MANAGER, MASTER, CLIENT
+- **Многоязычность**: Поддержка русского, английского, казахского
+- **Background tasks**: Celery для фоновых задач и напоминаний
 
-## Architecture
+## 🏗 Архитектура
 
-### Services
-- **API Gateway**: HTTP routing, authentication, rate limiting
-- **User Service**: Authentication, tenant management, user management
-- **Booking Service**: Core booking logic, availability checking
-- **Notification Service**: Email/SMS notifications, background job processing
-- **Payment Service**: Payment processing and subscription management (stub)
-- **Admin Service**: Platform administration and analytics
+### Микросервисы
 
-### Technology Stack
-- **Backend**: Go 1.21 with Gin framework
+1. **API Gateway** (порт 8000) - Главная точка входа, маршрутизация, аутентификация
+2. **User Service** (порт 8001) - Управление пользователями и аутентификация
+3. **Booking Service** (порт 8002) - Логика бронирования и проверка доступности
+4. **Notification Service** (порт 8003) - Отправка уведомлений через WhatsApp
+5. **Payment Service** (порт 8004) - Обработка платежей (заглушка)
+6. **Admin Service** (порт 8005) - Администрирование платформы
+7. **WhatsApp Service** (порт 3000) - Node.js сервис для WhatsApp интеграции
+
+### Технологический стек
+
+- **Backend**: Python 3.11 + FastAPI
+- **WhatsApp**: Node.js 18 + whatsapp-web.js
 - **Database**: PostgreSQL 15
 - **Cache**: Redis 7
-- **Communication**: gRPC for internal services, REST for external API
-- **Authentication**: JWT with role-based access control
+- **Background Jobs**: Celery
 - **Containerization**: Docker & Docker Compose
-- **Reverse Proxy**: Nginx with SSL termination
 
-## Quick Start
+## 📋 Предварительные требования
 
-### Prerequisites
-- Docker and Docker Compose
-- SSL certificates for your domain
-- SMTP credentials for email notifications
-- SMS provider credentials (optional)
+- Docker 20.10+
+- Docker Compose 2.0+
+- 4GB RAM минимум
+- WhatsApp аккаунт для отправки сообщений
 
-### 1. Clone and Setup
+## 🚀 Быстрый старт
+
+### 1. Клонирование и настройка
+
 ```bash
-git clone 
-cd booking-platform
+# Создать .env файл из примера
 cp .env.example .env
-# Edit .env with your configuration
+
+# Отредактировать .env и установить необходимые значения
+nano .env
 ```
 
-### 2. SSL Certificates
-Place your SSL certificates at:
-- `ssl/jazyl.tech.pem`
-- `ssl/jazyl.tech.key`
+### 2. Запуск всех сервисов
 
-Or update the paths in your `.env` file.
-
-### 3. Deploy
 ```bash
-# Make deploy script executable
-chmod +x deploy.sh
+# Собрать и запустить все контейнеры
+docker-compose up --build -d
 
-# Deploy to production
-./deploy.sh
+# Проверить статус сервисов
+docker-compose ps
 ```
 
-### 4. Access the Platform
-- Main Platform: https://jazyl.tech
-- Admin Panel: https://admin.jazyl.tech
-- API Documentation: https://jazyl.tech/api/docs
+### 3. Инициализация базы данных
 
-### Default Credentials
-- **Super Admin**: admin@jazyl.tech / admin123
-- **⚠️ Change default password immediately in production!**
-
-## Development
-
-### Development Setup
 ```bash
-# Install Go 1.21+
-# Install Docker and Docker Compose
-
-# Setup development environment
-make setup
-make dev
-
-# View logs
-make logs
-
-# Run tests
-make test
+# Создать таблицы и начальные данные
+docker-compose exec api-gateway python migrations/init_db.py
 ```
 
-### Available Make Commands
-- `make help` - Show available commands
-- `make build` - Build all services
-- `make start` - Start all services
-- `make stop` - Stop all services
-- `make logs` - View logs
-- `make test` - Run tests
-- `make clean` - Clean up containers
-- `make health` - Check service health
-- `make backup-db` - Backup database
-- `make migrate` - Run database migrations
+### 4. Настройка WhatsApp
 
-## API Documentation
+```bash
+# Получить QR код для аутентификации WhatsApp
+curl http://localhost:3000/qr
 
-### Authentication Endpoints
-- `POST /api/v1/register` - Register business
-- `POST /api/v1/login` - User login
-- `POST /api/v1/logout` - User logout
-- `POST /api/v1/refresh-token` - Refresh JWT token
+# ИЛИ просмотреть логи для QR кода в терминале
+docker-compose logs -f whatsapp-service
+```
 
-### Public Booking Endpoints
-- `GET /api/v1/public/business/:subdomain` - Get business info
-- `GET /api/v1/public/business/:subdomain/services` - Get services
-- `GET /api/v1/public/business/:subdomain/masters` - Get masters
-- `GET /api/v1/public/business/:subdomain/availability` - Check availability
-- `POST /api/v1/public/client/verify` - Verify client
-- `POST /api/v1/public/booking` - Create booking
+Отсканируйте QR код в WhatsApp на телефоне:
+1. Откройте WhatsApp
+2. Перейдите в Настройки → Связанные устройства
+3. Нажмите "Связать устройство"
+4. Отсканируйте QR код из терминала
 
-### Authenticated Endpoints
-All authenticated endpoints require `Authorization: Bearer <token>` header.
+### 5. Проверка работоспособности
 
-#### Booking Management
-- `GET /api/v1/bookings` - Get bookings (filtered by role)
-- `POST /api/v1/booking` - Create booking
-- `PUT /api/v1/booking/:id` - Update booking
-- `DELETE /api/v1/booking/:id` - Cancel booking
-- `POST /api/v1/booking/:id/complete` - Mark booking complete
+```bash
+# API Gateway
+curl http://localhost:8000/health
 
-#### Service Management (Owner/Manager only)
-- `GET /api/v1/services` - Get services
-- `POST /api/v1/service` - Create service
-- `PUT /api/v1/service/:id` - Update service
-- `DELETE /api/v1/service/:id` - Delete service
+# WhatsApp Service
+curl http://localhost:3000/health
 
-#### Master Management (Owner/Manager only)
-- `GET /api/v1/masters` - Get masters
-- `POST /api/v1/master` - Create master
-- `PUT /api/v1/master/:id` - Update master
-- `DELETE /api/v1/master/:id` - Delete master
+# Документация API
+открыть http://localhost:8000/api/docs
+```
 
-#### Admin Endpoints (Super Admin only)
-- `GET /api/v1/admin/tenants` - Get pending tenants
-- `PUT /api/v1/admin/tenant/:id/approve` - Approve tenant
-- `PUT /api/v1/admin/tenant/:id/reject` - Reject tenant
-- `GET /api/v1/admin/statistics` - Platform statistics
+## 📱 API Документация
 
-## Configuration
+### Swagger UI
+Интерактивная документация доступна по адресу:
+```
+http://localhost:8000/api/docs
+```
 
-### Environment Variables
-All configuration is done via environment variables. See `.env.example` for all available options.
+### Основные эндпоинты
 
-### Key Configuration Areas
-- **Domain Setup**: Configure your domains and SSL certificates
-- **Database**: PostgreSQL connection settings
-- **Redis**: Cache and session storage
-- **Email/SMS**: Notification provider credentials
-- **JWT**: Authentication token configuration
-- **Business Rules**: Trial periods, cancellation policies, etc.
-
-## Multi-Tenant Architecture
-
-### Domain Structure
-- `jazyl.tech` - Main platform for business registration
-- `admin.jazyl.tech` - Super admin panel
-- `{business}.jazyl.tech` - Public booking site for each business
-- `owner.{business}.jazyl.tech` - Business owner dashboard
-- `manager.{business}.jazyl.tech` - Location manager dashboard
-- `master.{business}.jazyl.tech` - Service provider dashboard
-
-### User Roles
-- **SUPER_ADMIN**: Platform administrator
-- **OWNER**: Business owner with full access to all locations
-- **MANAGER**: Location manager with location-specific access
-- **MASTER**: Service provider with booking management
-- **CLIENT**: End customers booking appointments
-
-### Multi-Location Support
-- One business can have multiple locations/branches
-- Location-specific managers and staff
-- Unified booking system across all locations
-- Location-specific analytics and reporting
-
-## Background Jobs
-
-The platform includes a robust background job system for:
-
-### Job Types
-- **Email Notifications**: Booking confirmations, reminders, cancellations
-- **SMS Notifications**: Verification codes, urgent reminders
-- **Booking Reminders**: Automated 24h and 2h before appointment
-- **Analytics Updates**: Daily statistics processing
-- **Trial Expiration**: Monitor and notify about trial periods
-- **System Health Checks**: Automated system monitoring
-
-### Job Management
-- Automatic retry with exponential backoff
-- Job scheduling and delayed execution
-- Redis-based job queue with persistence
-- Configurable worker count and retry policies
-
-## Monitoring and Health Checks
-
-### Health Check Endpoints
-- `/health` - Service health check (all services)
-- Individual service health checks on their HTTP ports
-
-### System Monitoring
-- Database connectivity monitoring
-- Redis connectivity monitoring
-- gRPC service health checks
-- Response time monitoring
-- Error rate tracking
-
-### Logging
-- Structured JSON logging
-- Request/response logging
-- Error tracking and reporting
-- Admin action audit logs
-
-## Security Features
-
-### Authentication & Authorization
-- JWT-based authentication with refresh tokens
-- Role-based access control (RBAC)
-- Session management for clients
-- Secure password hashing with bcrypt
-
-### Security Headers
-- CORS configuration
-- Security headers (X-Frame-Options, X-Content-Type-Options, etc.)
-- HTTPS enforcement
-- Rate limiting
-
-### Data Protection
-- Input validation and sanitization
-- SQL injection prevention
-- XSS protection
-- Secure cookie configuration
-
-## Caching Strategy
-
-### Redis Caching
-- **Booking Availability**: 5-minute cache for frequently accessed data
-- **Master Schedules**: 30-minute cache for moderate frequency access
-- **Service Lists**: 1-hour cache for relatively static data
-- **Business Information**: 1-hour cache for rarely changing data
-- **Client Sessions**: 30-day expiration for user convenience
-- **Rate Limiting**: 1-minute sliding window counters
-
-### Cache Invalidation
-- Automatic cache invalidation on data changes
-- Event-driven cache updates
-- Manual cache clearing capabilities
-
-## Internationalization (i18n)
-
-### Supported Languages
-- English (en) - Default
-- Russian (ru)
-- Kazakh (kk)
-
-### Translation System
-- Key-based translation system
-- JSON translation files
-- Dynamic language detection from headers
-- Localized email templates
-- Error message localization
-
-## Database Schema
-
-### Core Tables
-- `tenants` - Business information and settings
-- `locations` - Business locations/branches
-- `users` - All platform users with role-based access
-- `masters` - Service providers with specializations
-- `services` - Available services with pricing
-- `bookings` - Appointment bookings with full lifecycle
-- `client_sessions` - Simplified client authentication
-- `permission_requests` - Master permission management
-
-### Relationships
-- Multi-tenant isolation
-- Location-based organization
-- Role-based access control
-- Audit trail for all actions
-
-## Deployment
-
-### Production Deployment
-1. Setup SSL certificates
-2. Configure environment variables
-3. Run deployment script: `./deploy.sh`
-4. Monitor service health
-
-### Docker Services
-- PostgreSQL with persistent volume
-- Redis with persistent volume
-- Nginx reverse proxy with SSL
-- 6 microservices with health checks
-- Automatic service discovery and networking
-
-### Scaling Considerations
-- Horizontal scaling of microservices
-- Database connection pooling
-- Redis clustering for high availability
-- Load balancing across service instances
-
-## API Rate Limiting
-
-- 100 requests per minute per IP (configurable)
-- Different limits for different user roles
-- Sliding window rate limiting
-- Redis-based distributed rate limiting
-
-## Error Handling
-
-### Error Response Format
-```json
+#### Аутентификация
+```bash
+# Регистрация нового бизнеса
+POST /api/v1/register
 {
-  "error": "error_code",
-  "message": "Human readable error message",
-  "details": "Additional error details if available"
+  "email": "owner@business.com",
+  "password": "securepass123",
+  "full_name": "Иван Иванов",
+  "phone": "+77771234567",
+  "business_name": "Мой салон красоты",
+  "subdomain": "mysalon"
+}
+
+# Вход
+POST /api/v1/login
+{
+  "email": "owner@business.com",
+  "password": "securepass123"
 }
 ```
 
-### HTTP Status Codes
-- 200: Success
-- 201: Created
-- 400: Bad Request
-- 401: Unauthorized
-- 403: Forbidden
-- 404: Not Found
-- 429: Rate Limited
-- 500: Internal Server Error
+#### Публичные эндпоинты (для клиентов)
+```bash
+# Получить информацию о бизнесе
+GET /api/v1/public/business/{subdomain}
 
-## Contributing
+# Получить услуги
+GET /api/v1/public/business/{subdomain}/services
 
-1. Fork the repository
-2. Create a feature branch
-3. Make changes with tests
-4. Submit a pull request
+# Получить мастеров
+GET /api/v1/public/business/{subdomain}/masters
 
-### Code Style
-- Follow Go conventions
-- Use gofmt for formatting
-- Write comprehensive tests
-- Document public APIs
+# Проверить доступность
+GET /api/v1/public/business/{subdomain}/availability?master_id=1&date=2024-01-15
 
-## License
+# Создать бронирование
+POST /api/v1/public/booking
+{
+  "subdomain": "mysalon",
+  "client_phone": "+77779876543",
+  "client_name": "Алия Сарсенова",
+  "master_id": 1,
+  "service_id": 1,
+  "booking_date": "2024-01-15T14:00:00",
+  "notes": "Предпочитаю окно"
+}
+```
 
-This project is proprietary software. All rights reserved.
+#### Защищенные эндпоинты
+```bash
+# Все запросы требуют заголовок:
+Authorization: Bearer <access_token>
 
-## Support
+# Получить мои бронирования
+GET /api/v1/bookings
 
-For support and questions:
-- Create an issue in the repository
-- Contact: support@jazyl.tech
-- Documentation: https://docs.jazyl.tech
+# Отменить бронирование
+DELETE /api/v1/booking/{booking_id}
+```
+
+## 📨 WhatsApp интеграция
+
+### Отправка сообщений
+
+```bash
+# Отправить сообщение
+curl -X POST http://localhost:3000/send-message \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone": "+77771234567",
+    "message": "Привет! Это тестовое сообщение"
+  }'
+
+# Проверить номер
+curl -X POST http://localhost:3000/check-number \
+  -H "Content-Type: application/json" \
+  -d '{"phone": "+77771234567"}'
+
+# Массовая рассылка
+curl -X POST http://localhost:3000/send-bulk \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phones": ["+77771234567", "+77779876543"],
+    "message": "Акция! Скидка 20% на все услуги"
+  }'
+```
+
+### Формат телефонных номеров
+
+WhatsApp Service автоматически форматирует номера:
+- `87771234567` → `77771234567@c.us`
+- `+77771234567` → `77771234567@c.us`
+- `7771234567` → `77771234567@c.us`
+
+## 🛠 Команды управления
+
+### Docker Compose
+
+```bash
+# Запуск всех сервисов
+docker-compose up -d
+
+# Остановка всех сервисов
+docker-compose down
+
+# Перезапуск конкретного сервиса
+docker-compose restart api-gateway
+
+# Просмотр логов
+docker-compose logs -f
+
+# Просмотр логов конкретного сервиса
+docker-compose logs -f whatsapp-service
+
+# Пересборка сервисов
+docker-compose up --build -d
+
+# Очистка всех контейнеров и данных
+docker-compose down -v
+```
+
+### База данных
+
+```bash
+# Инициализация БД
+docker-compose exec api-gateway python migrations/init_db.py
+
+# Подключиться к PostgreSQL
+docker-compose exec postgres psql -U booking_user -d booking_platform
+
+# Бэкап базы данных
+docker-compose exec postgres pg_dump -U booking_user booking_platform > backup.sql
+
+# Восстановление из бэкапа
+docker-compose exec -T postgres psql -U booking_user booking_platform < backup.sql
+```
+
+### Redis
+
+```bash
+# Подключиться к Redis CLI
+docker-compose exec redis redis-cli
+
+# Очистить весь кеш
+docker-compose exec redis redis-cli FLUSHALL
+
+# Проверить количество ключей
+docker-compose exec redis redis-cli DBSIZE
+```
+
+## 👥 Начальные учетные данные
+
+После инициализации БД создаются следующие аккаунты:
+
+### Super Admin
+- **Email**: admin@jazyl.tech
+- **Password**: admin123
+- **Роль**: SUPER_ADMIN
+
+### Demo бизнес
+- **Subdomain**: demo
+- **Owner Email**: owner@demo.jazyl.tech
+- **Owner Password**: demo123
+
+⚠️ **ВАЖНО**: Смените пароли в продакшене!
+
+## 🔧 Конфигурация
+
+Основные настройки в `.env`:
+
+```env
+# База данных
+DATABASE_URL=postgresql://booking_user:booking_password@postgres:5432/booking_platform
+
+# JWT
+JWT_SECRET_KEY=your-secret-key-min-32-characters-long
+ACCESS_TOKEN_EXPIRE_MINUTES=1440  # 24 часа
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# WhatsApp
+WHATSAPP_SERVICE_URL=http://whatsapp-service:3000
+WHATSAPP_ENABLED=true
+
+# Бизнес логика
+DEFAULT_TRIAL_DAYS=30
+CANCELLATION_HOURS=2
+REMINDER_HOURS=24,2
+
+# Язык
+DEFAULT_LANGUAGE=ru
+SUPPORTED_LANGUAGES=ru,en,kk
+```
+
+## 📊 Структура проекта
+
+```
+booking-platform/
+├── api-gateway/           # API Gateway сервис
+│   ├── main.py
+│   ├── routes/           # HTTP маршруты
+│   └── middleware/       # Аутентификация, rate limiting
+├── user-service/         # Сервис пользователей
+│   ├── main.py
+│   └── services/
+├── booking-service/      # Сервис бронирований
+│   ├── main.py
+│   └── services/
+├── notification-service/ # Сервис уведомлений
+│   └── main.py
+├── admin-service/        # Админ панель
+│   └── main.py
+├── payment-service/      # Платежи (stub)
+│   └── main.py
+├── whatsapp-service/     # WhatsApp сервис (Node.js)
+│   ├── package.json
+│   ├── src/
+│   │   └── server.js
+│   └── Dockerfile
+├── shared/               # Общие модули
+│   ├── auth/            # JWT, хеширование
+│   ├── cache/           # Redis клиент
+│   ├── config/          # Конфигурация
+│   ├── database/        # База данных
+│   └── models/          # SQLAlchemy модели
+├── migrations/           # Миграции БД
+│   └── init_db.py
+├── docker-compose.yml
+├── Dockerfile.python
+├── requirements.txt
+├── .env.example
+└── README.md
+```
+
+## 🔐 Безопасность
+
+### Рекомендации
+
+1. **Смените JWT_SECRET_KEY** в продакшене на случайную строку минимум 32 символа
+2. **Смените пароли БД** в .env файле
+3. **Используйте HTTPS** для API Gateway
+4. **Ограничьте доступ** к портам сервисов (только API Gateway должен быть публичным)
+5. **Регулярно обновляйте** зависимости
+
+### Rate Limiting
+
+API Gateway автоматически ограничивает:
+- 100 запросов в минуту на IP адрес (настраивается в .env)
+
+## 🐛 Устранение неполадок
+
+### WhatsApp не подключается
+
+```bash
+# Проверить логи
+docker-compose logs whatsapp-service
+
+# Удалить сессию и переподключиться
+docker-compose down
+docker volume rm booking-platform_whatsapp_auth
+docker-compose up -d whatsapp-service
+
+# Получить новый QR код
+curl http://localhost:3000/qr
+```
+
+### База данных не подключается
+
+```bash
+# Проверить что PostgreSQL запущен
+docker-compose ps postgres
+
+# Проверить логи
+docker-compose logs postgres
+
+# Пересоздать БД
+docker-compose down -v
+docker-compose up -d postgres
+docker-compose exec api-gateway python migrations/init_db.py
+```
+
+### Сервисы не могут соединиться
+
+```bash
+# Проверить сеть Docker
+docker network ls
+docker network inspect booking-platform_booking-network
+
+# Перезапустить все сервисы
+docker-compose restart
+```
+
+## 📝 Разработка
+
+### Локальная разработка
+
+```bash
+# Установить зависимости
+pip install -r requirements.txt
+cd whatsapp-service && npm install
+
+# Запустить только БД и Redis
+docker-compose up -d postgres redis
+
+# Запустить сервисы локально
+export $(cat .env | xargs)
+python api-gateway/main.py  # порт 8000
+python user-service/main.py # порт 8001
+# и т.д.
+```
+
+### Тестирование
+
+```bash
+# Установить зависимости для тестов
+pip install pytest pytest-asyncio httpx
+
+# Запустить тесты
+pytest
+```
+
+## 📄 Лицензия
+
+Proprietary - Все права защищены
+
+## 🤝 Поддержка
+
+Для вопросов и проблем:
+- Создайте Issue в репозитории
+- Email: support@jazyl.tech
+
+## 🎯 Roadmap
+
+- [ ] Frontend приложение
+- [ ] Mobile приложения (iOS/Android)
+- [ ] Интеграция платежей (Kaspi, Paybox)
+- [ ] SMS уведомления
+- [ ] Email уведомления
+- [ ] Telegram бот интеграция
+- [ ] Аналитика и отчеты
+- [ ] Экспорт данных
+- [ ] API для интеграций
+- [ ] Webhook система
+
+---
+
+**Версия**: 2.0.0 (Python Edition с WhatsApp)
+**Обновлено**: 2024
