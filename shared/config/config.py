@@ -37,6 +37,21 @@ class Settings(BaseSettings):
     WHATSAPP_SERVICE_URL: str = "http://whatsapp-service:3000"
     WHATSAPP_ENABLED: bool = True
 
+    # Service Ports
+    API_GATEWAY_PORT: int = 8000
+    API_GATEWAY_HOST: str = "0.0.0.0"
+    USER_SERVICE_PORT: int = 8001
+    USER_SERVICE_HOST: str = "0.0.0.0"
+    BOOKING_SERVICE_PORT: int = 8002
+    BOOKING_SERVICE_HOST: str = "0.0.0.0"
+    NOTIFICATION_SERVICE_PORT: int = 8003
+    NOTIFICATION_SERVICE_HOST: str = "0.0.0.0"
+    PAYMENT_SERVICE_PORT: int = 8004
+    PAYMENT_SERVICE_HOST: str = "0.0.0.0"
+    ADMIN_SERVICE_PORT: int = 8005
+    ADMIN_SERVICE_HOST: str = "0.0.0.0"
+    WHATSAPP_SERVICE_PORT: int = 3000
+
     # Security
     BCRYPT_ROUNDS: int = 12
     RATE_LIMIT_PER_MINUTE: int = 100
