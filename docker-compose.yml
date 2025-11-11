@@ -1,185 +1,241 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
+    container_name: booking-postgres
     environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-booking_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-booking_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-booking_password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
-    networks:
-      - booking_network
-    restart: unless-stopped
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-booking_user}"]
+      interval: 10s
+      timeout: 5s
       retries: 5
+    networks:
+      - booking-network
 
+  # Redis Cache
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    container_name: booking-redis
+    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
-    networks:
-      - booking_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  nginx:
-    image: nginx:alpine
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/nginx/ssl
-    depends_on:
-      - api-gateway
-    networks:
-      - booking_network
-    restart: unless-stopped
+      - "6379:6379"
     healthcheck:
-      test: ["CMD", "nginx", "-t"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - booking-network
 
+  # API Gateway
   api-gateway:
     build:
       context: .
-      dockerfile: api-gateway/Dockerfile
-    env_file: .env
+      dockerfile: Dockerfile.python
+    container_name: booking-api-gateway
+    command: python api-gateway/main.py
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      user-service:
-        condition: service_healthy
-      booking-service:
-        condition: service_healthy
-      notification-service:
-        condition: service_healthy
-      payment-service:
-        condition: service_healthy
-      admin-service:
-        condition: service_healthy
+    volumes:
+      - ./api-gateway:/app/api-gateway
+      - ./shared:/app/shared
     networks:
-      - booking_network
+      - booking-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
+  # User Service
   user-service:
     build:
       context: .
-      dockerfile: user-service/Dockerfile
-    env_file: .env
+      dockerfile: Dockerfile.python
+    container_name: booking-user-service
+    command: python user-service/main.py
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    ports:
+      - "8001:8001"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - ./user-service:/app/user-service
+      - ./shared:/app/shared
     networks:
-      - booking_network
+      - booking-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
+  # Booking Service
   booking-service:
     build:
       context: .
-      dockerfile: booking-service/Dockerfile
-    env_file: .env
+      dockerfile: Dockerfile.python
+    container_name: booking-booking-service
+    command: python booking-service/main.py
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    ports:
+      - "8002:8002"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      whatsapp-service:
+        condition: service_started
+    volumes:
+      - ./booking-service:/app/booking-service
+      - ./shared:/app/shared
     networks:
-      - booking_network
+      - booking-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
+  # Notification Service
   notification-service:
     build:
       context: .
-      dockerfile: notification-service/Dockerfile
-    env_file: .env
+      dockerfile: Dockerfile.python
+    container_name: booking-notification-service
+    command: python notification-service/main.py
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    ports:
+      - "8003:8003"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      whatsapp-service:
+        condition: service_started
+    volumes:
+      - ./notification-service:/app/notification-service
+      - ./shared:/app/shared
     networks:
-      - booking_network
+      - booking-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
+  # Payment Service
   payment-service:
     build:
       context: .
-      dockerfile: payment-service/Dockerfile
-    env_file: .env
+      dockerfile: Dockerfile.python
+    container_name: booking-payment-service
+    command: python payment-service/main.py
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    ports:
+      - "8004:8004"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - ./payment-service:/app/payment-service
+      - ./shared:/app/shared
     networks:
-      - booking_network
+      - booking-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8084/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
+  # Admin Service
   admin-service:
     build:
       context: .
-      dockerfile: admin-service/Dockerfile
-    env_file: .env
+      dockerfile: Dockerfile.python
+    container_name: booking-admin-service
+    command: python admin-service/main.py
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    ports:
+      - "8005:8005"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - ./admin-service:/app/admin-service
+      - ./shared:/app/shared
     networks:
-      - booking_network
+      - booking-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8085/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+
+  # WhatsApp Service (Node.js)
+  whatsapp-service:
+    build:
+      context: ./whatsapp-service
+      dockerfile: Dockerfile
+    container_name: booking-whatsapp-service
+    environment:
+      - WHATSAPP_SERVICE_PORT=3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - whatsapp_auth:/app/.wwebjs_auth
+    networks:
+      - booking-network
+    restart: unless-stopped
+
+  # Celery Worker (for background tasks)
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: booking-celery-worker
+    command: celery -A notification-service.main.celery_app worker --loglevel=info
+    environment:
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./notification-service:/app/notification-service
+      - ./shared:/app/shared
+    networks:
+      - booking-network
+    restart: unless-stopped
+
+networks:
+  booking-network:
+    driver: bridge
 
 volumes:
   postgres_data:
   redis_data:
-
-networks:
-  booking_network:
-    driver: bridge
+  whatsapp_auth:

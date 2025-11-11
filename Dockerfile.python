@@ -1,0 +1,33 @@
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy shared module
+COPY shared/ ./shared/
+
+# Copy all services
+COPY api-gateway/ ./api-gateway/
+COPY user-service/ ./user-service/
+COPY booking-service/ ./booking-service/
+COPY notification-service/ ./notification-service/
+COPY payment-service/ ./payment-service/
+COPY admin-service/ ./admin-service/
+
+# Set Python path
+ENV PYTHONPATH=/app
+
+# Default command (will be overridden by docker-compose)
+CMD ["python", "api-gateway/main.py"]
