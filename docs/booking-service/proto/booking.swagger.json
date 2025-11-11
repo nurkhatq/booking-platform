@@ -1,0 +1,471 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "booking-service/proto/booking.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "BookingService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {},
+  "definitions": {
+    "bookingBooking": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "locationId": {
+          "type": "string"
+        },
+        "masterId": {
+          "type": "string"
+        },
+        "serviceId": {
+          "type": "string"
+        },
+        "clientSessionId": {
+          "type": "string"
+        },
+        "clientName": {
+          "type": "string"
+        },
+        "clientEmail": {
+          "type": "string"
+        },
+        "clientPhone": {
+          "type": "string"
+        },
+        "bookingDate": {
+          "type": "string"
+        },
+        "bookingTime": {
+          "type": "string"
+        },
+        "duration": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "price": {
+          "type": "number",
+          "format": "double"
+        },
+        "status": {
+          "type": "string"
+        },
+        "clientNotes": {
+          "type": "string"
+        },
+        "masterNotes": {
+          "type": "string"
+        },
+        "cancellationReason": {
+          "type": "string"
+        },
+        "cancelledBy": {
+          "type": "string"
+        },
+        "cancelledAt": {
+          "type": "string"
+        },
+        "createdBy": {
+          "type": "string"
+        },
+        "confirmationCode": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "master": {
+          "$ref": "#/definitions/bookingMaster",
+          "title": "Joined data"
+        },
+        "service": {
+          "$ref": "#/definitions/bookingService"
+        },
+        "location": {
+          "$ref": "#/definitions/bookingLocation"
+        }
+      }
+    },
+    "bookingCancelBookingResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "bookingCheckAvailabilityResponse": {
+      "type": "object",
+      "properties": {
+        "availableSlots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/bookingTimeSlot"
+          }
+        }
+      }
+    },
+    "bookingCompleteBookingResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "bookingCreateBookingResponse": {
+      "type": "object",
+      "properties": {
+        "bookingId": {
+          "type": "string"
+        },
+        "confirmationCode": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "bookingCreateServiceResponse": {
+      "type": "object",
+      "properties": {
+        "serviceId": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "bookingDailyStats": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string"
+        },
+        "bookingsCount": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "revenue": {
+          "type": "number",
+          "format": "double"
+        }
+      }
+    },
+    "bookingDeleteServiceResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "bookingGetBookingResponse": {
+      "type": "object",
+      "properties": {
+        "booking": {
+          "$ref": "#/definitions/bookingBooking"
+        }
+      }
+    },
+    "bookingGetBookingStatisticsResponse": {
+      "type": "object",
+      "properties": {
+        "totalBookings": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "completedBookings": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "cancelledBookings": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "totalRevenue": {
+          "type": "number",
+          "format": "double"
+        },
+        "averageRating": {
+          "type": "number",
+          "format": "double"
+        },
+        "dailyStats": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/bookingDailyStats"
+          }
+        }
+      }
+    },
+    "bookingGetBookingsResponse": {
+      "type": "object",
+      "properties": {
+        "bookings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/bookingBooking"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "page": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "limit": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "bookingGetMasterScheduleResponse": {
+      "type": "object",
+      "properties": {
+        "bookings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/bookingBooking"
+          }
+        },
+        "availableSlots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/bookingTimeSlot"
+          }
+        }
+      }
+    },
+    "bookingGetServicesResponse": {
+      "type": "object",
+      "properties": {
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/bookingService"
+          }
+        }
+      }
+    },
+    "bookingLocation": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "city": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "isActive": {
+          "type": "boolean"
+        }
+      }
+    },
+    "bookingMaster": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "locationId": {
+          "type": "string"
+        },
+        "bio": {
+          "type": "string"
+        },
+        "photoUrl": {
+          "type": "string"
+        },
+        "specialization": {
+          "type": "string"
+        },
+        "experienceYears": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "rating": {
+          "type": "number",
+          "format": "double"
+        },
+        "totalReviews": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "isVisible": {
+          "type": "boolean"
+        },
+        "isAcceptingBookings": {
+          "type": "boolean"
+        },
+        "user": {
+          "$ref": "#/definitions/bookingUser"
+        }
+      }
+    },
+    "bookingService": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "basePrice": {
+          "type": "number",
+          "format": "double"
+        },
+        "baseDuration": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "isActive": {
+          "type": "boolean"
+        },
+        "popularityScore": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "bookingTimeSlot": {
+      "type": "object",
+      "properties": {
+        "startTime": {
+          "type": "string"
+        },
+        "endTime": {
+          "type": "string"
+        },
+        "isAvailable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "bookingUpdateBookingResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "bookingUpdateServiceResponse": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "bookingUser": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "firstName": {
+          "type": "string"
+        },
+        "lastName": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  }
+}
