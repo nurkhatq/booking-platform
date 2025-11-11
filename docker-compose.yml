@@ -44,7 +44,7 @@ services:
       context: .
       dockerfile: Dockerfile.python
     container_name: booking-api-gateway
-    command: python api-gateway/main.py
+    command: sh -c "cd api-gateway && python main.py"
     environment:
       - PYTHONUNBUFFERED=1
     env_file:
@@ -69,7 +69,7 @@ services:
       context: .
       dockerfile: Dockerfile.python
     container_name: booking-user-service
-    command: python user-service/main.py
+    command: sh -c "cd user-service && python main.py"
     environment:
       - PYTHONUNBUFFERED=1
     env_file:
@@ -94,7 +94,7 @@ services:
       context: .
       dockerfile: Dockerfile.python
     container_name: booking-booking-service
-    command: python booking-service/main.py
+    command: sh -c "cd booking-service && python main.py"
     environment:
       - PYTHONUNBUFFERED=1
     env_file:
@@ -121,7 +121,7 @@ services:
       context: .
       dockerfile: Dockerfile.python
     container_name: booking-notification-service
-    command: python notification-service/main.py
+    command: sh -c "cd notification-service && python main.py"
     environment:
       - PYTHONUNBUFFERED=1
     env_file:
@@ -148,7 +148,7 @@ services:
       context: .
       dockerfile: Dockerfile.python
     container_name: booking-payment-service
-    command: python payment-service/main.py
+    command: sh -c "cd payment-service && python main.py"
     environment:
       - PYTHONUNBUFFERED=1
     env_file:
@@ -173,7 +173,7 @@ services:
       context: .
       dockerfile: Dockerfile.python
     container_name: booking-admin-service
-    command: python admin-service/main.py
+    command: sh -c "cd admin-service && python main.py"
     environment:
       - PYTHONUNBUFFERED=1
     env_file:
