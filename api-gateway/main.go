@@ -89,9 +89,9 @@ func initializeGRPCClients(cfg *config.Config) map[string]*grpc.ClientConn {
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                10 * time.Second,
-			Timeout:             3 * time.Second,
-			PermitWithoutStream: true,
+			Time:                30 * time.Second,
+			Timeout:             5 * time.Second,
+			PermitWithoutStream: false,
 		}),
 		grpc.WithDefaultCallOptions(
 			grpc.WaitForReady(true),
